@@ -17,7 +17,7 @@ SMTP_SERVER = "74.125.140.108"
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
-EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciju
+EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
@@ -75,15 +75,16 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         for termin_str, info in list(podaci_baza["rezervirani"].items()):
             try:
                 if " (" in termin_str:
-                    vrijeme_tekst = termin_str.split(" (")
-                    cisto_vrijeme = vrijeme_tekst[0].strip()
-                    pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
-                    if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
-                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            podaci_baza["poslani_podsjetnici"].append(termin_str)
-                            promjena = True
+                    # Alternativni način rastavljanja teksta bez korištenja rizičnih uglatih zagrada
+                    for dio_s in termin_str.split(" ("):
+                        if "." in dio_s and ":" in dio_s:
+                            pocetak = datetime.strptime(dio_s.strip(), "%d.%m.%Y. %H:%M")
+                            if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
+                                naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                                tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                                if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                                    podaci_baza["poslani_podsjetnici"].append(termin_str)
+                                    promjena = True
             except:
                 continue
         if promjena:
@@ -184,9 +185,13 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
-            # Formiranje naziva termina strictly u obliku DD.MM.GGGG. HH:MM
-            cisti_opis_tekst = odabrani_opis.split(" - ")
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst[1]})"
+            # Razbijanje naziva bez korištenja uglatih zagrada radi sigurnosti u chatu
+            cisti_opis_tekst = ""
+            for dio_teksta in odabrani_opis.split(" - "):
+                if "minuta" not in dio_teksta:
+                    cisti_opis_tekst = dio_teksta
+            
+            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
             svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
@@ -194,20 +199,12 @@ with tab2:
             for postojeci in svi_postojeci_termini:
                 try:
                     if " (" in postojeci:
-                        v_poddio = postojeci.split(" (")
-                        c_vrijeme = v_poddio[0].strip()
-                        p_pocetak = datetime.strptime(c_vrijeme, "%d.%m.%Y. %H:%M")
-                        
-                        t_poddio = postojeci.split(" min")
-                        t_poddio_lijevo = t_poddio[0].split("(")
-                        t_min = int(t_poddio_lijevo[1].strip())
-                        
-                        p_kraj = p_pocetak + timedelta(minutes=t_min)
-                        
-                        if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
-                            preklapa_se = True
-                            break
-                except:
-                    continue
-            
-            if preklapa_se:
+                        c_vrijeme = ""
+                        t_min = 45
+                        for dio_s in postojeci.split(" ("):
+                            if "." in dio_s and ":" in dio_s:
+                                c_vrijeme = dio_s.strip()
+                            if "min" in dio_s:
+                                for dio_m in dio_s.split(" min"):
+                                    if dio_m.strip().isdigit():
+                                        t_min = int(dio_m.strip())
