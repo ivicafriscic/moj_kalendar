@@ -28,20 +28,25 @@ def spremi_podatke(podaci):
 def posalji_email(termin, ime_klijenta, email_klijenta):
     naslov = f"Nova rezervacija termina: {termin}"
     tekst_poruke = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
+    
     msg = MIMEText(tekst_poruke, "plain", "utf-8")
     msg["Subject"] = naslov
     msg["From"] = MOJ_EMAIL
     msg["To"] = EMAIL_PONUDACA
+
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
+        # PROMJENA: Koristimo SMTP_SSL i port 465 (puno stabilnije za web poslužitelje)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.ehlo()  # Obavezno predstavljanje Googleovom poslužitelju
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
         server.sendmail(MOJ_EMAIL, [EMAIL_PONUDACA], msg.as_string())
         server.quit()
         return True
     except Exception as e:
-        st.error(f"Greška pri slanju emaila: {e}")
+        # Ako i dalje zapne, Streamlit će ispisati TOČNU grešku na ekranu
+        st.error(f"⚠️ Sustav nije uspio poslati mail. Detalji greške: {e}")
         return False
+
 
 if "podaci" not in st.session_state:
     st.session_state.podaci = ucitaj_podatke()
