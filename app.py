@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 import threading
 import time
 import io
-import openpyxl  # <-- DODANO ZA EXCEL
+import openpyxl
 
 DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
