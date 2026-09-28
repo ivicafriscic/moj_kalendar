@@ -2,14 +2,14 @@
 import streamlit as st
 import json
 import os
-from datetime import datetime, timedelta, time as datetime_time
+from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart # DODANO ZA GOOGLE CALENDAR
 import threading
 import time
 import io
 import openpyxl
+import urllib.parse  # DODANO ZA SIGURAN LINK PREMA GOOGLE KALENDARU
 
 DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
@@ -20,6 +20,7 @@ SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
 EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST
+ 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
         with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
@@ -30,27 +31,15 @@ def spremi_podatke(podaci):
     with open(DATOTEKA_PODATAKA, "w", encoding="utf-8") as f:
         json.dump(podaci, f, indent=4, ensure_ascii=False)
 
-def posalji_email_genericki(primatelj, naslov, tekst, ics_sadrzaj=None, termin_str=None):
+def posalji_email_genericki(primatelj, naslov, tekst):
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
-        
-        # MIMEMultipart nam omogućuje slanje teksta i kalendarske pozivnice istovremeno
-        msg = MIMEMultipart("mixed") if ics_sadrzaj else MIMEMultipart("alternative")
+        msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
-        
-        part_tekst = MIMEText(tekst, "plain", "utf-8")
-        msg.attach(part_tekst)
-        
-        # DODAVANJE ICS POZIVNICE ZA GOOGLE CALENDAR
-        if ics_sadrzaj and termin_str:
-            part_cal = MIMEText(ics_sadrzaj, "calendar; method=REQUEST; charset=\"UTF-8\"")
-            part_cal.add_header("Content-Disposition", f"attachment; filename=\"skola_termin_{termin_str.replace(' ', '_')}.ics\"")
-            msg.attach(part_cal)
-            
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
@@ -59,22 +48,13 @@ def posalji_email_genericki(primatelj, naslov, tekst, ics_sadrzaj=None, termin_s
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
-    # Generiranje iCalendar (ICS) formata teksta koji Google kalendar automatski čita
-    pocetak_fmt = termin.replace("-", "").replace(" ", "T").replace(":", "") + "00"
-    vrijeme_obj = datetime.strptime(termin, "%Y-%m-%d %H:%M")
-    kraj_obj = vrijeme_obj + timedelta(minutes=45) # Zadana pretpostavka trajanja
-    kraj_fmt = kraj_obj.strftime("%Y%m%dT%H%M00")
-    
-    ics_kod = f"BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nUID:skola_{pocetak_fmt}@kreovz\nDTSTART:{pocetak_fmt}\nDTEND:{kraj_fmt}\nSUMMARY:Rezervacija: {ime_klijenta}\nDESCRIPTION:Termin rezervirao klijent {ime_klijenta} ({email_klijenta})\nEND:VEVENT\nEND:VCALENDAR"
-
     naslov_ponudac = f"Nova rezervacija termina: {termin}"
     tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
     
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    # Ponuđaču (vama) šaljemo mail s ICS datotekom kako bi Google Kalendar sam unio u raspored
-    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac, ics_sadrzaj=ics_kod, termin_str=termin)
+    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
@@ -90,7 +70,9 @@ def provjeri_i_posalji_podsjetnike():
             za_cetiri_sata = sada + timedelta(hours=4)
             for termin_str, info in list(podaci_baza["rezervirani"].items()):
                 try:
-                    vrijeme_termina = datetime.strptime(termin_str, "%Y-%m-%d %H:%M")
+                    # Uzimamo samo prvi dio (prije zagrade za trajanje)
+                    cisti_termin = termin_str.split(" (")[0]
+                    vrijeme_termina = datetime.strptime(cisti_termin, "%Y-%m-%d %H:%M")
                     if sada < vrijeme_termina <= za_cetiri_sata and termin_str not in podaci_baza["poslani_podsjetnici"]:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
                         tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
@@ -172,28 +154,53 @@ with tab2:
     if upisana_lozinka == ADMIN_LOZINKA:
         st.success("Pristup odobren!")
         
-        # --- NOVI GRAFIČKI PANEL ZA LAKŠE GENERIRANJE TERMINA ---
-        st.subheader("🛠️ Brzo generiranje termina")
+        # --- ISPRAVLJENO GRAFIČKO GENERIRANJE TERMINA ---
+        st.subheader("🛠️ Alat za generiranje termina")
         
+        # Pamćenje odabranog trajanja kroz gumbe
+        if "odabrano_trajanje" not in st.session_state:
+            st.session_state.odabrano_trajanje = 45 # Zadana vrijednost
+
         col_d, col_v = st.columns(2)
         odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
-        
-        # Lista fiksnih satnica za lakši odabir
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
-        odabrano_vrijeme = col_v.selectbox("2. Odaberite početno vrijeme:", sati_opcije)
+        odabrano_vrijeme = col_v.selectbox("2. Odaberite vrijeme početka:", sati_opcije)
         
-        st.write("3. Odaberite trajanje lekcije za ugradnju:")
+        st.write("3. Odaberite trajanje lekcije:")
         c1, c2, c3 = st.columns(3)
+        if c1.button("⏱️ 35 minuta", type="primary" if st.session_state.odabrano_trajanje == 35 else "secondary"):
+            st.session_state.odabrano_trajanje = 35
+        if c2.button("⏱️ 45 minuta", type="primary" if st.session_state.odabrano_trajanje == 45 else "secondary"):
+            st.session_state.odabrano_trajanje = 45
+        if c3.button("⏱️ 90 minuta", type="primary" if st.session_state.odabrano_trajanje == 90 else "secondary"):
+            st.session_state.odabrano_trajanje = 90
+            
+        st.info(f"Trenutno označeno trajanje: **{st.session_state.odabrano_trajanje} minuta**")
         
-        trajanje = None
-        if c1.button("⏱️ 35 minuta"): trajanje = 35
-        if c2.button("⏱️ 45 minuta"): trajanje = 45
-        if c3.button("⏱️ 90 minuta"): trajanje = 90
-        
-        if trajanje:
-            # Izračunavanje točne satnice spoja datuma i vremena
+        # GUMB KOJI STVARNO ZAPISUJE TERMIN
+        if st.button("➕ Kreiraj i dodaj termin u sustav"):
             pocetak_str = f"{odabrani_datum} {odabrano_vrijeme}"
             pocetak_dt = datetime.strptime(pocetak_str, "%Y-%m-%d %H:%M")
-            kraj_dt = pocetak_dt + timedelta(minutes=trajanje)
+            novi_termin_puni = f"{pocetak_dt.strftime('%Y-%m-%d %H:%M')} ({st.session_state.odabrano_trajanje} min)"
             
+            if novi_termin_puni in podaci["slobodni"] or novi_termin_puni in podaci["rezervirani"]:
+                st.error("Ovaj termin već postoji!")
+            else:
+                podaci["slobodni"].append(novi_termin_puni)
+                spremi_podatke(podaci)
+                st.success(f"Uspješno stvoren i objavljen termin: {novi_termin_puni}")
+                st.rerun()
 
+        st.subheader("Pregled i otkazivanje rezervacija")
+        if not podaci["rezervirani"]:
+            st.info("Nema rezerviranih termina.")
+        else:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Rezervacije"
+            ws.append(["Datum i Vrijeme", "Ime i Prezime", "E-mail klijenta"])
+            
+            for t, info in sorted(podaci["rezervirani"].items()):
+                ws.append([t, info['klijent'], info['email']])
+                
+                st.markdown(f"📅 **{t}** ➡️ 👤 {info['klijent']} ({info['email']})")
