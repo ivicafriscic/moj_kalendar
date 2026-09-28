@@ -10,7 +10,6 @@ import time
 import io
 import openpyxl
 import urllib.parse
-import re  # Ugrađeno za nepogrešivo čitanje hrvatskog formata datuma
 
 DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
@@ -21,11 +20,21 @@ SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
 EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST
- 
+
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
-        with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
+                podaci = json.load(f)
+                if "slobodni" not in podaci or not isinstance(podaci["slobodni"], list):
+                    podaci["slobodni"] = []
+                if "rezervirani" not in podaci or not isinstance(podaci["rezervirani"], dict):
+                    podaci["rezervirani"] = {}
+                if "poslani_podsjetnici" not in podaci:
+                    podaci["poslani_podsjetnici"] = []
+                return podaci
+        except:
+            pass
     return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": []}
 
 def spremi_podatke(podaci):
@@ -60,41 +69,37 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Izvlači datum i trajanje iz formata: 'DD.MM.GGGG. HH:MM (X min...)'"""
+    """Sigurno i nepogrešivo izvlačenje vremena i trajanja iz stringa."""
     try:
-        # Pronalazi prvi tekstualni dio koji odgovara datumu i vremenu
-        match_vrijeme = re.search(r'\d{2}\.\d{2}\.\d{4}\.\s+\d{2}:\d{2}', termin_puni)
-        # Pronalazi broj minuta unutar zagrade
-        match_minute = re.search(r'\((\d+)\s+min', termin_puni)
+        # Format: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
+        dijelovi_zagrada = termin_puni.split(" (")
+        vrijeme_str = dijelovi_zagrada[0].strip()
         
-        if match_vrijeme and match_minute:
-            vrijeme_str = match_vrijeme.group(0)
-            minute = int(match_minute.group(1))
-            
-            pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
-            kraj = pocetak + timedelta(minutes=minute)
-            return pocetak, kraj
+        trajanje_dio = dijelovi_zagrada[1].split(" min")
+        minute = int(trajanje_dio[0].strip())
+        
+        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
+        kraj = pocetak + timedelta(minutes=minute)
+        return pocetak, kraj
     except:
-        pass
-    return None, None
+        return None, None
 
 def provjeri_i_posalji_podsjetnike():
     while True:
         try:
             podaci_baza = ucitaj_podatke()
             promjena = False
-            if "poslani_podsjetnici" not in podaci_baza:
-                podaci_baza["poslani_podsjetnici"] = []
-                promjena = True
             sada = datetime.now()
             za_cetiri_sata = sada + timedelta(hours=4)
             
             for termin_str, info in list(podaci_baza["rezervirani"].items()):
                 pocetak, kraj = parsiraj_vrijeme_termina(termin_str)
-                if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza["poslani_podsjetnici"]:
+                if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
                     naslov_podsjetnik = "Podsjetnik na Vaš termin"
                     tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
                     if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                        if "poslani_podsjetnici" not in podaci_baza:
+                            podaci_baza["poslani_podsjetnici"] = []
                         podaci_baza["poslani_podsjetnici"].append(termin_str)
                         promjena = True
             if promjena:
@@ -137,7 +142,6 @@ with tab1:
             st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
             gumb_rezerviraj = None
         else:
-            # Prikaz klijenata je osiguran u ispravnom dd.mm.yyyy formatu
             termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni))
             gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
             
@@ -207,6 +211,3 @@ with tab2:
         st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
-            kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
-            
