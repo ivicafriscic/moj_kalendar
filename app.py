@@ -68,24 +68,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
-def parsiraj_vrijeme_termina(termin_puni):
-    """Nepogrešivo i matematički sigurno izvlačenje početka i kraja termina."""
-    try:
-        # Primjer formata: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
-        # Datum i vrijeme uvijek zauzimaju prvih 17 znakova: "28.09.2026. 14:30"
-        vrijeme_str = termin_puni[0:17]
-        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
-        
-        # Traženje broja minuta vađenjem teksta između zagrade i riječi ' min'
-        dio_nakon_zagrade = termin_puni.split("(")[1]
-        minute_str = dio_nakon_zagrade.split(" min")[0]
-        minute = int(minute_str)
-        
-        kraj = pocetak + timedelta(minutes=minute)
-        return pocetak, kraj
-    except:
-        return None, None
-
 def provjeri_i_posalji_podsjetnike():
     while True:
         try:
@@ -95,15 +77,20 @@ def provjeri_i_posalji_podsjetnike():
             za_cetiri_sata = sada + timedelta(hours=4)
             
             for termin_str, info in list(podaci_baza["rezervirani"].items()):
-                pocetak, kraj = parsiraj_vrijeme_termina(termin_str)
-                if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
-                    naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                    tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-                    if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                        if "poslani_podsjetnici" not in podaci_baza:
-                            podaci_baza["poslani_podsjetnici"] = []
-                        podaci_baza["poslani_podsjetnici"].append(termin_str)
-                        promjena = True
+                try:
+                    vrijeme_dio = termin_str.split(" (")
+                    cisto_vrijeme = vrijeme_dio[0]
+                    pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
+                    if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
+                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                            if "poslani_podsjetnici" not in podaci_baza:
+                                podaci_baza["poslani_podsjetnici"] = []
+                            podaci_baza["poslani_podsjetnici"].append(termin_str)
+                            promjena = True
+                except:
+                    continue
             if promjena:
                 spremi_podatke(podaci_baza)
         except Exception as e:
@@ -213,3 +200,12 @@ with tab2:
         st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
+            pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
+            kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
+            
+            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
+            
+            preklapa_se = False
+            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
+            
+            for postojeci in svi_postojeci_termini:
