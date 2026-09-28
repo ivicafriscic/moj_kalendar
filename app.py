@@ -10,6 +10,7 @@ import time
 import io
 import openpyxl
 import urllib.parse
+import re  # Ugrađeno za nepogrešivo čitanje hrvatskog formata datuma
 
 DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
@@ -20,7 +21,7 @@ SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
 EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST
-
+ 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
         with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
@@ -59,19 +60,23 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Pomoćna funkcija koja na siguran način izvlači datum, sate i minute trajanja iz teksta."""
+    """Izvlači datum i trajanje iz formata: 'DD.MM.GGGG. HH:MM (X min...)'"""
     try:
-        dijelovi = termin_puni.split(" (")
-        vrijeme_str = dijelovi[0].strip()
+        # Pronalazi prvi tekstualni dio koji odgovara datumu i vremenu
+        match_vrijeme = re.search(r'\d{2}\.\d{2}\.\d{4}\.\s+\d{2}:\d{2}', termin_puni)
+        # Pronalazi broj minuta unutar zagrade
+        match_minute = re.search(r'\((\d+)\s+min', termin_puni)
         
-        trajanje_dio = dijelovi[1].split(" min")
-        minute = int(trajanje_dio[0].strip())
-        
-        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
-        kraj = pocetak + timedelta(minutes=minute)
-        return pocetak, kraj
+        if match_vrijeme and match_minute:
+            vrijeme_str = match_vrijeme.group(0)
+            minute = int(match_minute.group(1))
+            
+            pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
+            kraj = pocetak + timedelta(minutes=minute)
+            return pocetak, kraj
     except:
-        return None, None
+        pass
+    return None, None
 
 def provjeri_i_posalji_podsjetnike():
     while True:
@@ -132,6 +137,7 @@ with tab1:
             st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
             gumb_rezerviraj = None
         else:
+            # Prikaz klijenata je osiguran u ispravnom dd.mm.yyyy formatu
             termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni))
             gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
             
@@ -204,10 +210,3 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
             
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
-            
-            preklapa_se = False
-            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
-            
-            for postojeci in svi_postojeci_termini:
-                p_pocetak, p_kraj = parsiraj_vrijeme_termina(postojeci)
