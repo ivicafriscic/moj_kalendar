@@ -12,7 +12,7 @@ DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "74.125.140.108"              
+SMTP_SERVER = "smtp.gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
