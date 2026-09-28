@@ -14,7 +14,7 @@ DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "smtp.gmail.com"
+SMTP_SERVER = "://gmail.com"
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
@@ -43,12 +43,10 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         server.quit()
         return True
     except Exception as e:
-        # Prikazujemo grešku izravno na ekranu ako SMTP zapne
         st.error(f"❌ Neuspješno slanje maila na {primatelj}. Greška: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
-    """Šalje mailove izravno i vraća status jesu li uspješno poslani."""
     naslov_ponudac = f"Nova rezervacija termina: {termin}"
     tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
     
@@ -59,7 +57,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
-# --- Pozadinski podsjetnici (vrti se odvojeno svakih 5 minuta) ---
 def provjeri_i_posalji_podsjetnike():
     while True:
         try:
@@ -76,7 +73,7 @@ def provjeri_i_posalji_podsjetnike():
                 try:
                     vrijeme_termina = datetime.strptime(termin_str, "%Y-%m-%d %H:%M")
                     if sada < vrijeme_termina <= za_cetiri_sata and termin_str not in podaci_baza["poslani_podsjetnici"]:
-                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                        naslov_podsjetnik = "Podsjetnik na Vaš terminal"
                         tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
                         
                         if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
@@ -100,7 +97,6 @@ podaci = st.session_state.podaci
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
-# --- LOKALNI LOGOTIP ---
 IME_SLIKE = "logo.png"
 if os.path.exists(IME_SLIKE):
     st.image(IME_SLIKE, use_container_width=True)
@@ -134,11 +130,9 @@ with tab1:
             if not ime or not email_kupca:
                 st.warning("Molimo ispunite sva polja!")
             else:
-                # Privremeno micanje termina unutar forme kako bi spriječili duple rezervacije
                 podaci["slobodni"].remove(termin)
                 podaci["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
                 
-                # Izravno slanje maila s vrćenjem Streamlit spinnera (animacije učitavanja)
                 with st.spinner("Slanje e-mail obavijesti..."):
                     slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
                 
@@ -147,12 +141,9 @@ with tab1:
                     st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
                     st.rerun()
                 else:
-                    # Ako mail padne, vraćamo termin među slobodne i ne dopuštamo spremanje
                     podaci["slobodni"].append(termin)
                     del podaci["rezervirani"][termin]
-                    st.error("Rezervacija nije dovršena zbog greške u slanju e-maila. Molimo provjerite lozinku i mailove na vrhu koda.")
 
-    # --- DRUŠTVENE MREŽE ---
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
     st.markdown("""
@@ -214,4 +205,12 @@ with tab2:
             
             st.markdown("---")
             st.download_button(
+                label="📥 Preuzmi Excel tablicu",
+                data=excel_data,
+                file_name=f"rezervacije_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+    elif upisana_lozinka != "":
+        st.error("Pogrešna lozinka!")
 
