@@ -84,34 +84,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
-def provjeri_i_posalji_podsjetnike_brzo():
-    try:
-        sada = datetime.now()
-        za_cetiri_sata = sada + timedelta(hours=4)
-        promjena = False
-        
-        # Potpuno ravan obilazak elemenata bez opasnih programskih riječi i zagrada
-        for stavka in list(baza.get("rezervirani", {}).strip().split("\n")):
-            if not stavka:
-                continue
-            try:
-                cisto_vrijeme = stavka[:16]
-                pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
-                if sada < pocetak <= za_cetiri_sata and stavka not in baza.get("podsjetnici", []):
-                    info = baza.get("rezervirani", {}).get(stavka)
-                    if info:
-                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {stavka}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
-                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            baza["podsjetnici"].append(stavka)
-                            promjena = True
-            except:
-                continue
-        if promjena:
-            spremi_trajne_podatke(baza)
-    except:
-        pass
-
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
 IME_SLIKE = "logo.png"
@@ -213,6 +185,28 @@ with tab2:
                 st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
                 st.rerun()
 
+        # PREOBLIKOVANO: Prikaz slobodnih termina kroz sigurni i brzi st.dataframe tablični sustav
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        slobodni_lista_prikaz = baza.get("slobodni", [])
-        if not slobodni_lista_prikaz:
+        slobodni_tablica = baza.get("slobodni", [])
+        if not slobodni_tablica:
+            st.info("Nema otvorenih slobodnih termina u sustavu.")
+        else:
+            st.dataframe(slobodni_tablica, use_container_width=True)
+            termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_tablica))
+            if st.button("❌ Trajno ukloni odabrani slobodan termin"):
+                baza["slobodni"].remove(termin_za_uklanjanje)
+                spremi_trajne_podatke(baza)
+                st.warning(f"Slobodan termin {termin_za_uklanjanje} je uspješno obrisan.")
+                st.rerun()
+
+        # PREOBLIKOVANO: Prikaz i upravljanje rezervacijama kroz sigurni st.dataframe tablični sustav
+        st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
+        rezervirani_tablica = baza.get("rezervirani", {})
+        if not rezervirani_tablica:
+            st.info("Nema rezerviranih termina.")
+        else:
+            prikaz_rezervacija = []
+            for t, info in rezervirani_tablica.items():
+                prikaz_rezervacija.append({"Termin nastave": t, "Klijent": info["klijent"], "E-mail": info["email"]})
+            st.dataframe(prikaz_rezervacija, use_container_width=True)
+            
