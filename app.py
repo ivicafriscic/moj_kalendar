@@ -14,7 +14,7 @@ DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "://gmail.com"
+SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
