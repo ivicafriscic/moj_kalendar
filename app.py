@@ -1,10 +1,9 @@
-import streamlit as st
+    import streamlit as st
 import json
 import os
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
-import threading
 import time
 import io
 import openpyxl
@@ -29,7 +28,7 @@ def ucitaj_podatke():
                     podaci["slobodni"] = []
                 if "rezervirani" not in podaci or not isinstance(podaci["rezervirani"], dict):
                     podaci["rezervirani"] = {}
-                if "poslani_podsjetnici" not in podaci:
+                if "poslani_podsjetnici" not in podaci or not isinstance(podaci["poslani_podsjetnici"], list):
                     podaci["poslani_podsjetnici"] = []
                 return podaci
         except:
@@ -53,7 +52,7 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         server.quit()
         return True
     except Exception as e:
-        st.error(f"❌ Neuspješno slanje maila na {primatelj}. Greška: {e}")
+        print(f"Greška pri slanju emaila na {primatelj}: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
@@ -67,45 +66,47 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
-def provjeri_i_posalji_podsjetnike():
-    while True:
-        try:
-            podaci_baza = ucitaj_podatke()
-            promjena = False
-            sada = datetime.now()
-            za_cetiri_sata = sada + timedelta(hours=4)
-            
-            for termin_str, info in list(podaci_baza["rezervirani"].items()):
-                try:
-                    # Rješenje protiv krađe znakova u chatu: izvlačimo točne tekstualne pozicije
-                    vrijeme_dio = termin_str.split(" (")
-                    cisto_vrijeme = vrijeme_dio[0]
-                    t_dio = vrijeme_dio[1].split(" min")
-                    t_min = int(t_dio[0])
-                    
-                    pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
-                    if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
-                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            if "poslani_podsjetnici" not in podaci_baza:
-                                podaci_baza["poslani_podsjetnici"] = []
-                            podaci_baza["poslani_podsjetnici"].append(termin_str)
-                            promjena = True
-                except:
-                    continue
-            if promjena:
-                spremi_podatke(podaci_baza)
-        except Exception as e:
-            print(f"Greška u pozadinskom podsjetniku: {e}")
-        time.sleep(300)
+def parsiraj_vrijeme_termina(termin_puni):
+    """Sigurno i nepogrešivo rastavljanje stringa pomoću splita s točnim indeksima."""
+    try:
+        dijelovi_zagrada = termin_puni.split(" (")
+        vrijeme_str = dijelovi_zagrada[0].strip()
+        
+        trajanje_dio = dijelovi_zagrada[1].split(" min")
+        minute = int(trajanje_dio[0].strip())
+        
+        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
+        kraj = pocetak + timedelta(minutes=minute)
+        return pocetak, kraj
+    except:
+        return None, None
 
-if not any(t.name == "KreoPodsjetnikThread" for t in threading.enumerate()):
-    timer_thread = threading.Thread(target=provjeri_i_posalji_podsjetnike, name="KreoPodsjetnikThread", daemon=True)
-    timer_thread.start()
+def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
+    """Tiha provjera podsjetnika bez blokiranja baze podataka i dretvi."""
+    try:
+        promjena = False
+        sada = datetime.now()
+        za_cetiri_sata = sada + timedelta(hours=4)
+        
+        for termin_str, info in list(podaci_baza["rezervirani"].items()):
+            pocetak, kraj = parsiraj_vrijeme_termina(termin_str)
+            if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
+                naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                    podaci_baza["poslani_podsjetnici"].append(termin_str)
+                    promjena = True
+        if promjena:
+            spremi_podatke(podaci_baza)
+    except Exception as e:
+        print(f"Greška u podsjetnicima: {e}")
+
+# --- INICIJALIZACIJA I TIHA PROVJERA ---
+podaci = ucitaj_podatke()
+provjeri_i_posalji_podsjetnike_brzo(podaci)
 
 if "podaci" not in st.session_state:
-    st.session_state.podaci = ucitaj_podatke()
+    st.session_state.podaci = podaci
 podaci = st.session_state.podaci
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
@@ -157,7 +158,7 @@ with tab1:
     st.subheader("🔗 Kontakt i društvene mreže")
     st.markdown("""
     Pratite naš rad ili nas kontaktirajte putem interneta:
-    * **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
+    * **Web stranica:** [://kreo-vz.com](https://://kreo-vz.com)
     * **Facebook:** [Škola brzog čitanja i mudrog učenja - Varaždin](https://facebook.com)
     * **Instagram:** [@skola_brzog_citanja_varazdin](https://instagram.com)
     """)
@@ -206,3 +207,6 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
             
+            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
+            
+            preklapa_se = False
