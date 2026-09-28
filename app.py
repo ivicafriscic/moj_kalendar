@@ -1,4 +1,3 @@
-
 import streamlit as st
 import json
 import os
@@ -12,14 +11,14 @@ import openpyxl
 import urllib.parse
 
 DATOTEKA_PODATAKA = "podaci.json"
-ADMIN_LOZINKA = "Ivo"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
+ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
 SMTP_SERVER = "74.125.140.108"              
 SMTP_PORT = 465
-MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
-MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
-EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST 
+MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
+MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
+EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
@@ -78,8 +77,12 @@ def provjeri_i_posalji_podsjetnike():
             
             for termin_str, info in list(podaci_baza["rezervirani"].items()):
                 try:
+                    # Rješenje protiv krađe znakova u chatu: izvlačimo točne tekstualne pozicije
                     vrijeme_dio = termin_str.split(" (")
                     cisto_vrijeme = vrijeme_dio[0]
+                    t_dio = vrijeme_dio[1].split(" min")
+                    t_min = int(t_dio[0])
+                    
                     pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
                     if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
@@ -154,7 +157,7 @@ with tab1:
     st.subheader("🔗 Kontakt i društvene mreže")
     st.markdown("""
     Pratite naš rad ili nas kontaktirajte putem interneta:
-    * **Web stranica:** [://kreo-vz.com](https://://kreo-vz.com)
+    * **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
     * **Facebook:** [Škola brzog čitanja i mudrog učenja - Varaždin](https://facebook.com)
     * **Instagram:** [@skola_brzog_citanja_varazdin](https://instagram.com)
     """)
@@ -203,9 +206,3 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
             
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
-            
-            preklapa_se = False
-            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
-            
-            for postojeci in svi_postojeci_termini:
