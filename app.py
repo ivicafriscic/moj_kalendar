@@ -183,7 +183,7 @@ with tab2:
                 ws.append([t, info['klijent'], info['email']])
                 
                 # Vizualni prikaz na ekranu weba
-                col1, col2 = st.columns()
+                col1, col2 = st.columns(2)
                 col1.write(f"📅 **{t}** ➡️ 👤 {info['klijent']} ({info['email']})")
                 if col2.button("Otkaži", key=f"del_{t}"):
                     podaci["slobodni"].append(t)
