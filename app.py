@@ -13,7 +13,7 @@ SMTP_SERVER = "://gmail.com"
 SMTP_PORT = 587
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
-EMAIL_PONUDACA = "ana.koren1@gmail.com" # <--- GDJE STIŽE OBAVIJEST
+EMAIL_PONUDACA = "ivo.friscic@gmail.com" # <--- GDJE STIŽE OBAVIJEST
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
