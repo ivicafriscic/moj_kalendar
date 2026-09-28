@@ -61,13 +61,11 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
 def parsiraj_vrijeme_termina(termin_puni):
     """Pomoćna funkcija koja precizno izvlači točan početak i kraj termina radi provjere preklapanja."""
     try:
-        # Format: "DD.MM.GGGG HH:MM (trajanje min - OPIS)"
         dijelovi = termin_puni.split(" (")
-        vrijeme_str = dijelovi[0]
+        vrijeme_str = dijelovi[0].strip()
         
-        # Izvlačenje samo broja minuta (npr. iz "35 min - POMOĆ...")
-        trajanje_dio = dijelovi[1].split(" min")[0]
-        minute = int(trajanje_dio)
+        trajanje_dio = dijelovi[1].split(" min")
+        minute = int(trajanje_dio[0].strip())
         
         pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y %H:%M")
         kraj = pocetak + timedelta(minutes=minute)
@@ -172,6 +170,10 @@ with tab2:
         if "odabrano_trajanje" not in st.session_state:
             st.session_state.odabrano_trajanje = 45
 
+        if "admin_uspjeh" in st.session_state:
+            st.success(st.session_state.admin_uspjeh)
+            del st.session_state.admin_uspjeh
+
         col_d, col_v = st.columns(2)
         odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
@@ -186,9 +188,12 @@ with tab2:
         if c3.button("⏱️ 90 minuta", type="primary" if st.session_state.odabrano_trajanje == 90 else "secondary"):
             st.session_state.odabrano_trajanje = 90
             
+        # DODANO: Dinamičko postavljanje opisa na temelju odabranih minuta
         opis_lekcije = ""
         if st.session_state.odabrano_trajanje == 35:
             opis_lekcije = " - POMOĆ U ČITANJU"
+        elif st.session_state.odabrano_trajanje == 45:
+            opis_lekcije = " - BESPLATNO TESTIRANJE ČITANJA"
         elif st.session_state.odabrano_trajanje == 90:
             opis_lekcije = " - BRZO ČITANJE I MUDRO UČENJE"
             
@@ -204,8 +209,7 @@ with tab2:
             svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
             
             for postojeci in svi_postojeci_termini:
-                p_pocetak, p_kraj = parsiraj_vrijeme_termina(postojeci)
-                if p_pocetak and p_kraj:
+
                     if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
                         preklapa_se = True
                         break
