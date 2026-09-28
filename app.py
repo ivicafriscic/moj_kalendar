@@ -15,7 +15,7 @@ DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "smtp.gmail.com"
+SMTP_SERVER = "74.125.140.108"              
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
@@ -59,15 +59,18 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Pomoćna funkcija koja izvlači točan početak i kraj termina radi provjere preklapanja."""
+    """Pomoćna funkcija koja precizno izvlači točan početak i kraj termina radi provjere preklapanja."""
     try:
         # Format: "DD.MM.GGGG HH:MM (trajanje min - OPIS)"
         dijelovi = termin_puni.split(" (")
         vrijeme_str = dijelovi[0]
-        trajanje_str = dijelovi[1].split(" min")[0]
+        
+        # Izvlačenje samo broja minuta (npr. iz "35 min - POMOĆ...")
+        trajanje_dio = dijelovi[1].split(" min")[0]
+        minute = int(trajanje_dio)
         
         pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y %H:%M")
-        kraj = pocetak + timedelta(minutes=int(trajanje_str))
+        kraj = pocetak + timedelta(minutes=minute)
         return pocetak, kraj
     except:
         return None, None
@@ -183,7 +186,6 @@ with tab2:
         if c3.button("⏱️ 90 minuta", type="primary" if st.session_state.odabrano_trajanje == 90 else "secondary"):
             st.session_state.odabrano_trajanje = 90
             
-        # Definiranje opisa ovisno o minutama
         opis_lekcije = ""
         if st.session_state.odabrano_trajanje == 35:
             opis_lekcije = " - POMOĆ U ČITANJU"
@@ -193,23 +195,18 @@ with tab2:
         st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            # Generiranje u formatu DD.MM.GGGG HH:MM
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
             
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y %H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
             
-            # --- PROVJERA PREKLAPANJA TERMINA ---
             preklapa_se = False
             svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
             
             for postojeci in svi_postojeci_termini:
                 p_pocetak, p_kraj = parsiraj_vrijeme_termina(postojeci)
                 if p_pocetak and p_kraj:
-                    # Provjera siječe li se raspon novog termina s postojećim
+                    if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
+                        preklapa_se = True
+                        break
 
-            
-            for t, info in sorted(podaci["rezervirani"].items()):
-                ws.append([t, info['klijent'], info['email']])
-                
-                st.markdown(f"📅 **{t}** ➡️ 👤 {info['klijent']} ({info['email']})")
