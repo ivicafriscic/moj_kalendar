@@ -19,16 +19,6 @@ MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
 EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST
 
-DATOTEKA_PODATAKA = "podaci.json"
-ADMIN_LOZINKA = "MojaSigurnaLozinka123"  # <--- PROMIJENITE OVU LOZINKU ZA ADMIN PANEL
-
-# --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "://gmail.com"
-SMTP_PORT = 465
-MOJ_EMAIL = "vas-email@gmail.com"            # <--- VAŠ GMAIL PREKO KOJEG SE ŠALJE PORUKA
-MOJA_LOZINKA = "abcdefghijklmnop"            # <--- VAŠA GOOGLE APP PASSWORD LOZINKA OD 16 SLOVA
-EMAIL_PONUDACA = "ponudac-primatelj@gmail.com" # <--- VAŠ MAIL KAMO VAM STIŽU OBAVIJESTI
-
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
         with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
