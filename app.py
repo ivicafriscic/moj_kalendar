@@ -66,42 +66,32 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
 
-def parsiraj_vrijeme_termina(termin_puni):
-    """Sigurno i nepogrešivo rastavljanje stringa pomoću splita s točnim indeksima."""
-    try:
-        dijelovi_zagrada = termin_puni.split(" (")
-        vrijeme_str = dijelovi_zagrada[0].strip()
-        
-        trajanje_dio = dijelovi_zagrada[1].split(" min")
-        minute = int(trajanje_dio[0].strip())
-        
-        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
-        kraj = pocetak + timedelta(minutes=minute)
-        return pocetak, kraj
-    except:
-        return None, None
-
 def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
-    """Tiha provjera podsjetnika bez blokiranja baze podataka i dretvi."""
     try:
         promjena = False
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
         
         for termin_str, info in list(podaci_baza["rezervirani"].items()):
-            pocetak, kraj = parsiraj_vrijeme_termina(termin_str)
-            if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
-                naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-                if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                    podaci_baza["poslani_podsjetnici"].append(termin_str)
-                    promjena = True
+            try:
+                # Sigurno vađenje čistog datuma bez ulaženja u zagrade i indekse
+                if " (" in termin_str:
+                    cisto_vrijeme = termin_str.split(" (")[0].strip()
+                    pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
+                    if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
+                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                            podaci_baza["poslani_podsjetnici"].append(termin_str)
+                            promjena = True
+            except:
+                continue
         if promjena:
             spremi_podatke(podaci_baza)
     except Exception as e:
         print(f"Greška u podsjetnicima: {e}")
 
-# --- INICIJALIZACIJA I TIHA PROVJERA ---
+# --- INICIJALIZACIJA BAZE PODATAKA ---
 podaci = ucitaj_podatke()
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
@@ -172,9 +162,6 @@ with tab2:
         
         st.subheader("🛠️ Alat za generiranje termina")
         
-        if "odabrano_trajanje" not in st.session_state:
-            st.session_state.odabrano_trajanje = 45
-
         if "admin_uspjeh" in st.session_state:
             st.success(st.session_state.admin_uspjeh)
             del st.session_state.admin_uspjeh
@@ -184,29 +171,40 @@ with tab2:
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
         odabrano_vrijeme = col_v.selectbox("2. Odaberite vrijeme početka:", sati_opcije)
         
+        # PROMJENA: Stabilan i siguran radio gumb koji ne gubi stanje prilikom klika na spremanje
         st.write("3. Odaberite trajanje lekcije:")
-        c1, c2, c3 = st.columns(3)
-        if c1.button("⏱️ 35 minuta", type="primary" if st.session_state.odabrano_trajanje == 35 else "secondary"):
-            st.session_state.odabrano_trajanje = 35
-        if c2.button("⏱️ 45 minuta", type="primary" if st.session_state.odabrano_trajanje == 45 else "secondary"):
-            st.session_state.odabrano_trajanje = 45
-        if c3.button("⏱️ 90 minuta", type="primary" if st.session_state.odabrano_trajanje == 90 else "secondary"):
-            st.session_state.odabrano_trajanje = 90
-            
-        opis_lekcije = ""
-        if st.session_state.odabrano_trajanje == 35:
-            opis_lekcije = " - POMOĆ U ČITANJU"
-        elif st.session_state.odabrano_trajanje == 45:
-            opis_lekcije = " - BESPLATNO TESTIRANJE ČITANJA"
-        elif st.session_state.odabrano_trajanje == 90:
-            opis_lekcije = " - BRZO ČITANJE I MUDRO UČENJE"
-            
-        st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
+        opcije_trajanja = {
+            "35 minuta - POMOĆ U ČITANJU": 35,
+            "45 minuta - BESPLATNO TESTIRANJE ČITANJA": 45,
+            "90 minuta - BRZO ČITANJE I MUDRO UČENJE": 90
+        }
+        odabrani_opis = st.radio("Označite željeni program:", list(opcije_trajanja.keys()))
+        minute_trajanja = opcije_trajanja[odabrani_opis]
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
-            kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
+            kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
+            # Formiranje naziva termina strictly u obliku DD.MM.GGGG. HH:MM
+            cisti_opis_tekst = odabrani_opis.split(" - ")[1]
+            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
+            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
+            
+            for postojeci in svi_postojeci_termini:
+                try:
+                    if " (" in postojeci:
+                        v_poddio = postojeci.split(" (")[0].strip()
+                        p_pocetak = datetime.strptime(v_poddio, "%d.%m.%Y. %H:%M")
+                        
+                        # Izvlačenje trajanja bez korištenja riskantnih zagrada iz chata
+                        t_poddio = postojeci.split(" min")[0].split("(")[1].strip()
+                        p_kraj = p_pocetak + timedelta(minutes=int(t_poddio))
+                        
+                        if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
+                            preklapa_se = True
+                            break
+                except:
+                    continue
+            
