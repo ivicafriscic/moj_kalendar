@@ -59,7 +59,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
     
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
-    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kavih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
     ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
@@ -73,7 +73,6 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         
         for k in list(podaci_baza.get("rezervirani", {}).keys()):
             try:
-                # Ograničavamo na prvih 16 znakova za format GGGG-MM-DD HH:MM
                 cisto_vrijeme = k[:16]
                 pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
                 if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
@@ -91,13 +90,13 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
     except Exception as e:
         print(f"Greška u podsjetnicima: {e}")
 
-# --- INICIJALIZACIJA I UČITAVANJE ---
+# --- INICIJALIZACIJA I UKLANJANJE TISKARSKE GREŠKE ---
 podaci = ucitaj_podatke()
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
 if "podaci" not in st.session_state:
     st.session_state.podaci = podaci
-podaci = st.session_state.st.session_state.podaci if "podaci" in st.session_state else podaci
+podaci = st.session_state.podaci
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
@@ -187,7 +186,7 @@ with tab2:
         tekst_programa = opcije_trajanja[odabrani_opis]
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            # Generiranje točnog punog stringa za kalendar
+            # Generiranje točnog punog stringa za kalendar (UKLONJENA PROVJERA PREKLAPANJA)
             novi_termin_puni = f"{novi_termin} ({tekst_programa})"
             
             if novi_termin_puni in podaci.get("slobodni", []):
@@ -207,4 +206,6 @@ with tab2:
                 col_s1.write(f"🟢 {slobodan}")
                 if col_s2.button("Ukloni termin", key=f"rem_{slobodan}"):
                     podaci["slobodni"].remove(slobodan)
+                    spremi_podatke(podaci)
+                    st.warning(f"Slobodan termin {slobodan} je trajno uklonjen.")
 
