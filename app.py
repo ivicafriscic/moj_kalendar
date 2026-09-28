@@ -61,9 +61,11 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
 def parsiraj_vrijeme_termina(termin_puni):
     """Pomoćna funkcija koja precizno izvlači točan početak i kraj termina radi provjere preklapanja."""
     try:
+        # Primjer formata: "28.09.2026 14:30 (35 min - POMOĆ U ČITANJU)"
         dijelovi = termin_puni.split(" (")
         vrijeme_str = dijelovi[0].strip()
         
+        # Izvlačenje minuta iz drugog dijela: "35 min - POMOĆ U ČITANJU)"
         trajanje_dio = dijelovi[1].split(" min")
         minute = int(trajanje_dio[0].strip())
         
@@ -188,7 +190,6 @@ with tab2:
         if c3.button("⏱️ 90 minuta", type="primary" if st.session_state.odabrano_trajanje == 90 else "secondary"):
             st.session_state.odabrano_trajanje = 90
             
-        # DODANO: Dinamičko postavljanje opisa na temelju odabranih minuta
         opis_lekcije = ""
         if st.session_state.odabrano_trajanje == 35:
             opis_lekcije = " - POMOĆ U ČITANJU"
@@ -208,9 +209,6 @@ with tab2:
             preklapa_se = False
             svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
             
-            for postojeci in svi_postojeci_termini:
 
-                    if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
-                        preklapa_se = True
                         break
 
