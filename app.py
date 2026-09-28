@@ -108,6 +108,12 @@ tab1, tab2 = st.tabs(["👤 Rezerviraj Termin", "🔐 Admin Panel"])
 
 with tab1:
     st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite svoje podatke.")
+    
+    # Ako postoji spremljena obavijest o uspjehu u memoriji, prikaži je ovdje (izvan forme)
+    if "uspjeh_poruka" in st.session_state:
+        st.success(st.session_state.uspjeh_poruka)
+        del st.session_state.uspjeh_poruka
+
     with st.form("forma_rezervacija", clear_on_submit=True):
         ime = st.text_input("Ime i Prezime:")
         email_kupca = st.text_input("Vaš E-mail:")
@@ -124,14 +130,17 @@ with tab1:
             if not ime or not email_kupca:
                 st.warning("Molimo ispunite sva polja!")
             else:
+                # 1. Odmah upiši u bazu i makni termin da netko drugi ne klikne u isto vrijeme
                 podaci["slobodni"].remove(termin)
                 podaci["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
                 spremi_podatke(podaci)
                 
-                with st.spinner("Slanje e-mail obavijesti..."):
-                    posalji_email_potvrde(termin, ime, email_kupca)
+                # 2. Pokreni slanje maila u zasebnoj brzoj dretvi kako ne bi zablokiralo sučelje
+                email_thread = threading.Thread(target=posalji_email_potvrde, args=(termin, ime, email_kupca))
+                email_thread.start()
                 
-                st.success(f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail.")
+                # 3. Spremi poruku i osvježi stranicu
+                st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda se šalje na Vaš e-mail."
                 st.rerun()
 
     # --- KREO KONTAKTI ---
@@ -170,20 +179,15 @@ with tab2:
         if not podaci["rezervirani"]:
             st.info("Nema rezerviranih termina.")
         else:
-            # --- DODANA GENERACIJA EXCEL DATOTEKE ---
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Rezervacije"
-            
-            # Naslovi stupaca
             ws.append(["Datum i Vrijeme", "Ime i Prezime", "E-mail klijenta"])
             
-            # Punjenje podacima
             for t, info in sorted(podaci["rezervirani"].items()):
                 ws.append([t, info['klijent'], info['email']])
                 
-                # Vizualni prikaz na ekranu weba
-                col1, col2 = st.columns(2)
+                col1, col2 = st.columns(2)  # <-- ISPRAVLJENO: Broj je unutra!
                 col1.write(f"📅 **{t}** ➡️ 👤 {info['klijent']} ({info['email']})")
                 if col2.button("Otkaži", key=f"del_{t}"):
                     podaci["slobodni"].append(t)
@@ -195,7 +199,6 @@ with tab2:
                     st.warning(f"Termin {t} je otkazan.")
                     st.rerun()
             
-            # Pretvaranje u bajtove za preuzimanje preko gumba
             excel_data = io.BytesIO()
             wb.save(excel_data)
             excel_data.seek(0)
@@ -210,5 +213,4 @@ with tab2:
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
-
 
