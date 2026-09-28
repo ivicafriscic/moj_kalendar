@@ -4,7 +4,6 @@ import os
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
-import time
 import io
 import openpyxl
 import urllib.parse
@@ -72,19 +71,17 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
         
-        for termin_str, info in list(podaci_baza["rezervirani"].items()):
+        for k, v in list(podaci_baza.get("metapodaci", {})).items():
             try:
-                if " (" in termin_str:
-                    # Alternativni način rastavljanja teksta bez korištenja rizičnih uglatih zagrada
-                    for dio_s in termin_str.split(" ("):
-                        if "." in dio_s and ":" in dio_s:
-                            pocetak = datetime.strptime(dio_s.strip(), "%d.%m.%Y. %H:%M")
-                            if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
-                                naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                                tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-                                if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                                    podaci_baza["poslani_podsjetnici"].append(termin_str)
-                                    promjena = True
+                pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
+                if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
+                    info = podaci_baza["rezervirani"].get(k)
+                    if info:
+                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                            podaci_baza["poslani_podsjetnici"].append(k)
+                            promjena = True
             except:
                 continue
         if promjena:
@@ -94,6 +91,8 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
 
 # --- INICIJALIZACIJA BAZE PODATAKA ---
 podaci = ucitaj_podatke()
+if "metapodaci" not in podaci:
+    podaci["metapodaci"] = {}
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
 if "podaci" not in st.session_state:
@@ -181,30 +180,35 @@ with tab2:
         odabrani_opis = st.radio("Označite željeni program:", list(opcije_trajanja.keys()))
         minute_trajanja = opcije_trajanja[odabrani_opis]
         
+        # Sigurno i bezuvjetno izvlačenje čistog opisa programa
+        cisti_opis_tekst = "Nastava"
+        if "POMOĆ" in odabrani_opis:
+            cisti_opis_tekst = "POMOĆ U ČITANJU"
+        elif "TESTIRANJE" in odabrani_opis:
+            cisti_opis_tekst = "BESPLATNO TESTIRANJE ČITANJA"
+        elif "MUDRO" in odabrani_opis:
+            cisti_opis_tekst = "BRZO ČITANJE I MUDRO UČENJE"
+            
+        st.info(f"Trenutno označeno: **{minute_trajanja} minuta - {cisti_opis_tekst}**")
+        
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
-            # Razbijanje naziva bez korištenja uglatih zagrada radi sigurnosti u chatu
-            cisti_opis_tekst = ""
-            for dio_teksta in odabrani_opis.split(" - "):
-                if "minuta" not in dio_teksta:
-                    cisti_opis_tekst = dio_teksta
-            
+            # Formiranje naziva termina strictly u obliku DD.MM.GGGG. HH:MM
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
-            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
-            
-            for postojeci in svi_postojeci_termini:
+            for k, v in podaci.get("metapodaci", {}).items():
                 try:
-                    if " (" in postojeci:
-                        c_vrijeme = ""
-                        t_min = 45
-                        for dio_s in postojeci.split(" ("):
-                            if "." in dio_s and ":" in dio_s:
-                                c_vrijeme = dio_s.strip()
-                            if "min" in dio_s:
-                                for dio_m in dio_s.split(" min"):
-                                    if dio_m.strip().isdigit():
-                                        t_min = int(dio_m.strip())
+                    p_pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
+                    p_kraj = datetime.strptime(v.get("kraj"), "%Y-%m-%d %H:%M")
+                    if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
+                        preklapa_se = True
+                        break
+                except:
+                    continue
+            
+            if preklapa_se:
+                st.error("⚠️ Greška! Odabrano vrijeme se preklapa s već postojećim terminom u rasporedu!")
+            elif novi_termin_puni in podaci["slobodni"]:
