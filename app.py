@@ -12,7 +12,7 @@ import openpyxl
 import urllib.parse
 
 DATOTEKA_PODATAKA = "podaci.json"
-ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
+ADMIN_LOZINKA = "Ivo"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
 SMTP_SERVER = "74.125.140.108"              
