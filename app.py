@@ -5,7 +5,11 @@ from email.mime.text import MIMEText
 import io
 import openpyxl
 import urllib.parse
+import os
+import json
 
+# Trajna lokalna datoteka na samom poslužitelju Streamlita
+DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
@@ -15,13 +19,27 @@ MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
 EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
-# --- POTPUNO NOVI MEMORIJSKI SUSTAV (BEZ DATOTEKA) ---
-if "baza_slobodni" not in st.session_state:
-    st.session_state.baza_slobodni = []
-if "baza_rezervirani" not in st.session_state:
-    st.session_state.baza_rezervirani = {}
-if "baza_podsjetnici" not in st.session_state:
-    st.session_state.baza_podsjetnici = []
+def ucitaj_trajne_podatke():
+    if os.path.exists(DATOTEKA_BAZE):
+        try:
+            with open(DATOTEKA_BAZE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"slobodni": [], "rezervirani": {}, "podsjetnici": []}
+
+def spremi_trajne_podatke(podaci):
+    try:
+        with open(DATOTEKA_BAZE, "w", encoding="utf-8") as f:
+            json.dump(podaci, f, indent=4, ensure_ascii=False)
+    except:
+        pass
+
+# --- INICIJALIZACIJA STRUКТURE ---
+if "baza_lokalna" not in st.session_state:
+    st.session_state.baza_lokalna = ucitaj_trajne_podatke()
+
+baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
@@ -71,24 +89,27 @@ def provjeri_i_posalji_podsjetnike_brzo():
     try:
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
+        promjena = False
         
-        for k in list(st.session_state.baza_rezervirani.keys()):
+        for k in list(baza.get("rezervirani", {}).keys()):
             try:
                 cisto_vrijeme = k[:16]
                 pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
-                if sada < pocetak <= za_cetiri_sata and k not in st.session_state.baza_podsjetnici:
-                    info = st.session_state.baza_rezervirani.get(k)
+                if sada < pocetak <= za_cetiri_sata and k not in baza.get("podsjetnici", []):
+                    info = baza.get("rezervirani", {}).get(k)
                     if info:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
                         tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
                         if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            st.session_state.baza_podsjetnici.append(k)
+                            baza["podsjetnici"].append(k)
+                            promjena = True
             except:
                 continue
+        if promjena:
+            spremi_trajne_podatke(baza)
     except:
         pass
 
-# Pokretanje brze tihe provjere podsjetnika
 provjeri_i_posalji_podsjetnike_brzo()
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
@@ -109,7 +130,7 @@ with tab1:
         st.success(st.session_state.uspjeh_poruka)
         del st.session_state.uspjeh_poruka
 
-    slobodni_prikaz = [t for t in st.session_state.baza_slobodni if t not in st.session_state.baza_rezervirani]
+    slobodni_prikaz = [t for t in baza.get("slobodni", []) if t not in baza.get("rezervirani", {})]
     
     if not slobodni_prikaz:
         st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
@@ -124,16 +145,17 @@ with tab1:
                 if not ime or not email_kupca:
                     st.warning("Molimo ispunite sva polja!")
                 else:
-                    st.session_state.baza_slobodni.remove(termin)
-                    st.session_state.baza_rezervirani[termin] = {"klijent": ime, "email": email_kupca}
+                    baza["slobodni"].remove(termin)
+                    baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
                     with st.spinner("Slanje e-mail obavijesti..."):
                         slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
                     if slanje_uspjelo:
+                        spremi_trajne_podatke(baza)
                         st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
                         st.rerun()
                     else:
-                        st.session_state.baza_slobodni.append(termin)
-                        del st.session_state.baza_rezervirani[termin]
+                        baza["slobodni"].append(termin)
+                        del baza["rezervirani"][termin]
 
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
@@ -158,9 +180,10 @@ with tab2:
             del st.session_state.admin_uspjeh
 
         if st.button("🚨 Očisti cijelu listu (Kreni ispočetka)"):
-            st.session_state.baza_slobodni = []
-            st.session_state.baza_rezervirani = {}
-            st.session_state.baza_podsjetnici = []
+            baza["slobodni"] = []
+            baza["rezervirani"] = {}
+            baza["podsjetnici"] = []
+            spremi_trajne_podatke(baza)
             st.warning("Svi podaci su u potpunosti očišćeni!")
             st.rerun()
 
@@ -182,24 +205,17 @@ with tab2:
             vrijeme_iso = f"{odabrani_datum} {odabrano_vrijeme}"
             novi_termin_puni = f"{vrijeme_iso} ({tekst_programa})"
             
-            if novi_termin_puni in st.session_state.baza_slobodni:
+            if novi_termin_puni in baza.get("slobodni", []):
                 st.error("Ovaj termin već postoji kao slobodan!")
             else:
-                st.session_state.baza_slobodni.append(novi_termin_puni)
+                baza["slobodni"].append(novi_termin_puni)
+                spremi_trajne_podatke(baza)
                 st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
                 st.rerun()
 
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        if not st.session_state.baza_slobodni:
+        if not baza.get("slobodni", []):
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
-            for slobodan in sorted(st.session_state.baza_slobodni):
-                col_s1, col_s2 = st.columns(2)
-                col_s1.write(f"🟢 {slobodan}")
-                if col_s2.button("Ukloni slobodan", key=f"rem_{slobodan}"):
-                    st.session_state.baza_slobodni.remove(slobodan)
-                    st.warning(f"Slobodan termin {slobodan} je uklonjen.")
-                    st.rerun()
+            for slobodan in sorted(baza["slobodni"]):
 
-        st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
-        if not st.session_state.baza_rezervirani:
