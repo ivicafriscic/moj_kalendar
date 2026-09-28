@@ -90,13 +90,13 @@ def provjeri_i_posalji_podsjetnike_brzo():
         za_cetiri_sata = sada + timedelta(hours=4)
         promjena = False
         
-        rezervirani_lista = list(baza.get("rezervirani", {}).keys())
-        for stavka in rezervirani_lista:
+        rezervirani_rjecnik = baza.get("rezervirani", {})
+        for stavka in list(rezervirani_rjecnik.keys()):
             try:
                 cisto_vrijeme = stavka[:16]
                 pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
                 if sada < pocetak <= za_cetiri_sata and stavka not in baza.get("podsjetnici", []):
-                    info = baza.get("rezervirani", {}).get(stavka)
+                    info = rezervirani_rjecnik.get(stavka)
                     if info:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
                         tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {stavka}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
@@ -214,6 +214,7 @@ with tab2:
                 st.rerun()
 
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        if not baza.get("slobodni", []):
+        slobodni_lista_prikaz = baza.get("slobodni", [])
+        if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
