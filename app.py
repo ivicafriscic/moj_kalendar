@@ -69,9 +69,9 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Sigurno i nepogrešivo izvlačenje vremena i trajanja iz stringa."""
+    """Sigurno rastavljanje stringa pomoću splita bez opasnosti od krađe programskih znakova."""
     try:
-        # Format: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
+        # Primjer: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
         dijelovi_zagrada = termin_puni.split(" (")
         vrijeme_str = dijelovi_zagrada[0].strip()
         
@@ -211,3 +211,4 @@ with tab2:
         st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
+            pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
