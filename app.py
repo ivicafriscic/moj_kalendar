@@ -29,10 +29,12 @@ def ucitaj_podatke():
                     podaci["rezervirani"] = {}
                 if "poslani_podsjetnici" not in podaci or not isinstance(podaci["poslani_podsjetnici"], list):
                     podaci["poslani_podsjetnici"] = []
+                if "metapodaci" not in podaci or not isinstance(podaci["metapodaci"], dict):
+                    podaci["metapodaci"] = {}
                 return podaci
         except:
             pass
-    return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": []}
+    return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": [], "metapodaci": {}}
 
 def spremi_podatke(podaci):
     with open(DATOTEKA_PODATAKA, "w", encoding="utf-8") as f:
@@ -71,14 +73,14 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
         
-        for k, v in list(podaci_baza.get("metapodaci", {})).items():
+        for k, v in list(podaci_baza.get("metapodaci", {}).items()):
             try:
                 pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
                 if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
                     info = podaci_baza["rezervirani"].get(k)
                     if info:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
                         if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
                             podaci_baza["poslani_podsjetnici"].append(k)
                             promjena = True
@@ -91,8 +93,6 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
 
 # --- INICIJALIZACIJA BAZE PODATAKA ---
 podaci = ucitaj_podatke()
-if "metapodaci" not in podaci:
-    podaci["metapodaci"] = {}
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
 if "podaci" not in st.session_state:
@@ -180,7 +180,6 @@ with tab2:
         odabrani_opis = st.radio("Označite željeni program:", list(opcije_trajanja.keys()))
         minute_trajanja = opcije_trajanja[odabrani_opis]
         
-        # Sigurno i bezuvjetno izvlačenje čistog opisa programa
         cisti_opis_tekst = "Nastava"
         if "POMOĆ" in odabrani_opis:
             cisti_opis_tekst = "POMOĆ U ČITANJU"
@@ -195,7 +194,6 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
-            # Formiranje naziva termina strictly u obliku DD.MM.GGGG. HH:MM
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
@@ -212,4 +210,4 @@ with tab2:
             if preklapa_se:
                 st.error("⚠️ Greška! Odabrano vrijeme se preklapa s već postojećim terminom u rasporedu!")
             elif novi_termin_puni in podaci["slobodni"]:
-
+                st.error("Ovaj termin već postoji kao slobodan!")
