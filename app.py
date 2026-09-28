@@ -36,9 +36,9 @@ def ucitaj_podatke():
             pass
     return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": [], "metapodaci": {}}
 
-def spremi_podatke(podaci):
+def spremi_podatke(podaci_za_spremiti):
     with open(DATOTEKA_PODATAKA, "w", encoding="utf-8") as f:
-        json.dump(podaci, f, indent=4, ensure_ascii=False)
+        json.dump(podaci_za_spremiti, f, indent=4, ensure_ascii=False)
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
@@ -53,7 +53,7 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         server.quit()
         return True
     except Exception as e:
-        print(f"Greška pri slanju emaila na {primatelj}: {e}")
+        print(f"Greška pri slanju emaila: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
@@ -103,11 +103,12 @@ st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="c
 
 IME_SLIKE = "logo.png"
 if os.path.exists(IME_SLIKE):
-    st.image(IME_SLIKE, width=350)
+    st.image(IME_SLIKE, use_container_width=True)
 else:
     st.header("Škola brzog čitanja i mudrog učenja Varaždin")
 
 st.title("📅 Online Rezervacija Termina")
+st.markdown("Ovdje možete brzo i izravno rezervirati ili organizirati termine za nastavu.")
 tab1, tab2 = st.tabs(["👤 Rezerviraj Termin", "🔐 Admin Panel"])
 
 with tab1:
@@ -119,13 +120,13 @@ with tab1:
     with st.form("forma_rezervacija", clear_on_submit=True):
         ime = st.text_input("Ime i Prezime:")
         email_kupca = st.text_input("Vaš E-mail:")
-        slobodni = [t for t in podaci["slobodni"] if t not in podaci["rezervirani"]]
+        slobodni_prikaz = [t for t in podaci["slobodni"] if t not in podaci["rezervirani"]]
         
-        if not slobodni:
+        if not slobodni_prikaz:
             st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
             gumb_rezerviraj = None
         else:
-            termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni))
+            termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni_prikaz))
             gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
             
         if gumb_rezerviraj:
@@ -166,6 +167,15 @@ with tab2:
             st.success(st.session_state.admin_uspjeh)
             del st.session_state.admin_uspjeh
 
+        if st.button("🚨 Očisti cijelu bazu podataka (Kreni ispočetka)"):
+            podaci["slobodni"] = []
+            podaci["rezervirani"] = {}
+            podaci["poslani_podsjetnici"] = []
+            podaci["metapodaci"] = {}
+            spremi_podatke(podaci)
+            st.warning("Baza podataka je u potpunosti obrisana!")
+            st.rerun()
+
         col_d, col_v = st.columns(2)
         odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
@@ -194,7 +204,6 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
-            # ISPRAVLJENO: Sigurno spajanje naziva bez rizičnog splitanja liste
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
@@ -202,12 +211,3 @@ with tab2:
                 try:
                     p_pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
                     p_kraj = datetime.strptime(v.get("kraj"), "%Y-%m-%d %H:%M")
-                    if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
-                        preklapa_se = True
-                        break
-                except:
-                    continue
-            
-            if preklapa_se:
-                st.error("⚠️ Greška! Odabrano vrijeme se preklapa s već postojećim terminom u rasporedu!")
-            elif novi_termin_puni in podaci["slobodni"]:
