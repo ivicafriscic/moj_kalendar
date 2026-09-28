@@ -6,14 +6,14 @@ import smtplib
 from email.mime.text import MIMEText
 
 DATOTEKA_PODATAKA = "podaci.json"
-ADMIN_LOZINKA = "MojaSigurnaLozinka123"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
+ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
 SMTP_SERVER = "://gmail.com"
 SMTP_PORT = 587
 MOJ_EMAIL = "vas-email@gmail.com"            # <--- VAŠ GMAIL
-MOJA_LOZINKA = "ovdje_ide_aplikacijska_lozinka" # <--- GOOGLE APP PASSWORD (16 SLOVA)
-EMAIL_PONUDACA = "ponudac-primatelj@gmail.com" # <--- GDJE STIŽE OBAVIJEST
+MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
+EMAIL_PONUDACA = "ana.koren1@gmail.com" # <--- GDJE STIŽE OBAVIJEST
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
