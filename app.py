@@ -103,7 +103,7 @@ st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="c
 
 IME_SLIKE = "logo.png"
 if os.path.exists(IME_SLIKE):
-    st.image(IME_SLIKE, use_container_width=True)
+    st.image(IME_SLIKE, width=350)
 else:
     st.header("Škola brzog čitanja i mudrog učenja Varaždin")
 
@@ -194,6 +194,7 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
+            # ISPRAVLJENO: Sigurno spajanje naziva bez rizičnog splitanja liste
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
@@ -210,4 +211,3 @@ with tab2:
             if preklapa_se:
                 st.error("⚠️ Greška! Odabrano vrijeme se preklapa s već postojećim terminom u rasporedu!")
             elif novi_termin_puni in podaci["slobodni"]:
-                st.error("Ovaj termin već postoji kao slobodan!")
