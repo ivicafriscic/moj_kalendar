@@ -11,7 +11,7 @@ ADMIN_LOZINKA = "Pletern1c@"  # <--- PROMIJENITE OVU LOZINKU ZA ADMINA
 # --- PODACI ZA EMAIL POŠILJATELJA ---
 SMTP_SERVER = "://gmail.com"
 SMTP_PORT = 587
-MOJ_EMAIL = "vas-email@gmail.com"            # <--- VAŠ GMAIL
+MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
 EMAIL_PONUDACA = "ana.koren1@gmail.com" # <--- GDJE STIŽE OBAVIJEST
 
