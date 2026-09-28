@@ -23,13 +23,14 @@ def ucitaj_podatke():
         try:
             with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
                 podaci = json.load(f)
-                if "slobodni" not in podaci or not isinstance(podaci["slobodni"], list):
+                # Prisilno osiguravanje čistih mapa i listi bez obzira na stare zapise
+                if not isinstance(podaci.get("slobodni"), list):
                     podaci["slobodni"] = []
-                if "rezervirani" not in podaci or not isinstance(podaci["rezervirani"], dict):
+                if not isinstance(podaci.get("rezervirani"), dict):
                     podaci["rezervirani"] = {}
-                if "poslani_podsjetnici" not in podaci or not isinstance(podaci["poslani_podsjetnici"], list):
+                if not isinstance(podaci.get("poslani_podsjetnici"), list):
                     podaci["poslani_podsjetnici"] = []
-                if "metapodaci" not in podaci or not isinstance(podaci["metapodaci"], dict):
+                if not isinstance(podaci.get("metapodaci"), dict):
                     podaci["metapodaci"] = {}
                 return podaci
         except:
@@ -81,7 +82,7 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
                 try:
                     pocetak = datetime.strptime(pocetak_str, "%Y-%m-%d %H:%M")
                     if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
-                        info = podaci_baza["rezervirani"].get(k)
+                        info = podaci_baza.get("rezervirani", {}).get(k)
                         if info:
                             naslov_podsjetnik = "Podsjetnik na Vaš termin"
                             tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
@@ -121,33 +122,32 @@ with tab1:
         st.success(st.session_state.uspjeh_poruka)
         del st.session_state.uspjeh_poruka
 
-    with st.form("forma_rezervacija", clear_on_submit=True):
-        ime = st.text_input("Ime i Prezime:")
-        email_kupca = st.text_input("Vaš E-mail:")
-        slobodni_prikaz = [t for t in podaci["slobodni"] if t not in podaci["rezervirani"]]
-        
-        if not slobodni_prikaz:
-            st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
-            gumb_rezerviraj = None
-        else:
+    slobodni_prikaz = [t for t in podaci.get("slobodni", []) if t not in podaci.get("rezervirani", {})]
+    
+    if not slobodni_prikaz:
+        st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
+    else:
+        with st.form("forma_rezervacija", clear_on_submit=True):
+            ime = st.text_input("Ime i Prezime:")
+            email_kupca = st.text_input("Vaš E-mail:")
             termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni_prikaz))
             gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
             
-        if gumb_rezerviraj:
-            if not ime or not email_kupca:
-                st.warning("Molimo ispunite sva polja!")
-            else:
-                podaci["slobodni"].remove(termin)
-                podaci["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
-                with st.spinner("Slanje e-mail obavijesti..."):
-                    slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
-                if slanje_uspjelo:
-                    spremi_podatke(podaci)
-                    st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
-                    st.rerun()
+            if gumb_rezerviraj:
+                if not ime or not email_kupca:
+                    st.warning("Molimo ispunite sva polja!")
                 else:
-                    podaci["slobodni"].append(termin)
-                    del podaci["rezervirani"][termin]
+                    podaci["slobodni"].remove(termin)
+                    podaci["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
+                    with st.spinner("Slanje e-mail obavijesti..."):
+                        slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                    if slanje_uspjelo:
+                        spremi_podatke(podaci)
+                        st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
+                        st.rerun()
+                    else:
+                        podaci["slobodni"].append(termin)
+                        del podaci["rezervirani"][termin]
 
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
@@ -171,6 +171,7 @@ with tab2:
             st.success(st.session_state.admin_uspjeh)
             del st.session_state.admin_uspjeh
 
+        # --- GUMB ZA TOTALNO RESTARTIRANJE STRANICE ---
         if st.button("🚨 Očisti cijelu bazu podataka (Kreni ispočetka)"):
             podaci["slobodni"] = []
             podaci["rezervirani"] = {}
@@ -211,4 +212,4 @@ with tab2:
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
-            meta_provjera = podaci.get("metapodaci", {})
+
