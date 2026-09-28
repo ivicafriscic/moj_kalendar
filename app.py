@@ -23,19 +23,16 @@ def ucitaj_podatke():
         try:
             with open(DATOTEKA_PODATAKA, "r", encoding="utf-8") as f:
                 podaci = json.load(f)
-                # Prisilno osiguravanje čistih mapa i listi bez obzira na stare zapise
-                if not isinstance(podaci.get("slobodni"), list):
+                if "slobodni" not in podaci or not isinstance(podaci["slobodni"], list):
                     podaci["slobodni"] = []
-                if not isinstance(podaci.get("rezervirani"), dict):
+                if "rezervirani" not in podaci or not isinstance(podaci["rezervirani"], dict):
                     podaci["rezervirani"] = {}
-                if not isinstance(podaci.get("poslani_podsjetnici"), list):
+                if "poslani_podsjetnici" not in podaci or not isinstance(podaci["poslani_podsjetnici"], list):
                     podaci["poslani_podsjetnici"] = []
-                if not isinstance(podaci.get("metapodaci"), dict):
-                    podaci["metapodaci"] = {}
                 return podaci
         except:
             pass
-    return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": [], "metapodaci": {}}
+    return {"slobodni": [], "rezervirani": {}, "poslani_podsjetnici": []}
 
 def spremi_podatke(podaci_za_spremiti):
     with open(DATOTEKA_PODATAKA, "w", encoding="utf-8") as f:
@@ -62,7 +59,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
     
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
-    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kavih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
     ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
@@ -74,35 +71,33 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
         
-        meta = podaci_baza.get("metapodaci", {})
-        for k in list(meta.keys()):
-            v = meta.get(k, {})
-            pocetak_str = v.get("pocetak", "")
-            if pocetak_str:
-                try:
-                    pocetak = datetime.strptime(pocetak_str, "%Y-%m-%d %H:%M")
-                    if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
-                        info = podaci_baza.get("rezervirani", {}).get(k)
-                        if info:
-                            naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                            tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
-                            if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                                podaci_baza["poslani_podsjetnici"].append(k)
-                                promjena = True
-                except:
-                    continue
+        for k in list(podaci_baza.get("rezervirani", {}).keys()):
+            try:
+                # Ograničavamo na prvih 16 znakova za format GGGG-MM-DD HH:MM
+                cisto_vrijeme = k[:16]
+                pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
+                if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
+                    info = podaci_baza.get("rezervirani", {}).get(k)
+                    if info:
+                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
+                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                            podaci_baza["poslani_podsjetnici"].append(k)
+                            promjena = True
+            except:
+                continue
         if promjena:
             spremi_podatke(podaci_baza)
     except Exception as e:
         print(f"Greška u podsjetnicima: {e}")
 
-# --- INICIJALIZACIJA BAZE PODATAKA ---
+# --- INICIJALIZACIJA I UČITAVANJE ---
 podaci = ucitaj_podatke()
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
 if "podaci" not in st.session_state:
     st.session_state.podaci = podaci
-podaci = st.session_state.podaci
+podaci = st.session_state.st.session_state.podaci if "podaci" in st.session_state else podaci
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
@@ -171,45 +166,45 @@ with tab2:
             st.success(st.session_state.admin_uspjeh)
             del st.session_state.admin_uspjeh
 
-        # --- GUMB ZA TOTALNO RESTARTIRANJE STRANICE ---
         if st.button("🚨 Očisti cijelu bazu podataka (Kreni ispočetka)"):
             podaci["slobodni"] = []
             podaci["rezervirani"] = {}
             podaci["poslani_podsjetnici"] = []
-            podaci["metapodaci"] = {}
             spremi_podatke(podaci)
             st.warning("Baza podataka je u potpunosti obrisana!")
             st.rerun()
 
-        col_d, col_v = st.columns(2)
-        odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
-        sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
-        odabrano_vrijeme = col_v.selectbox("2. Odaberite vrijeme početka:", sati_opcije)
+        # Vraćanje klasičnog tekstualnog unosa s izvornim formatom datuma
+        novi_termin = st.text_input("Unesite termin u starom formatu (Format: GGGG-MM-DD HH:MM):", value=datetime.now().strftime("%Y-%m-%d %H:%M"))
         
-        st.write("3. Odaberite trajanje lekcije:")
+        st.write("Odaberite program lekcije:")
         opcije_trajanja = {
-            "35 minuta - POMOĆ U ČITANJU": 35,
-            "45 minuta - BESPLATNO TESTIRANJE ČITANJA": 45,
-            "90 minuta - BRZO ČITANJE I MUDRO UČENJE": 90
+            "35 minuta - POMOĆ U ČITANJU": "35 min - POMOĆ U ČITANJU",
+            "45 minuta - BESPLATNO TESTIRANJE ČITANJA": "45 min - BESPLATNO TESTIRANJE ČITANJA",
+            "90 minuta - BRZO ČITANJE I MUDRO UČENJE": "90 min - BRZO ČITANJE I MUDRO UČENJE"
         }
         odabrani_opis = st.radio("Označite željeni program:", list(opcije_trajanja.keys()))
-        minute_trajanja = opcije_trajanja[odabrani_opis]
-        
-        cisti_opis_tekst = "Nastava"
-        if "POMOĆ" in odabrani_opis:
-            cisti_opis_tekst = "POMOĆ U ČITANJU"
-        elif "TESTIRANJE" in odabrani_opis:
-            cisti_opis_tekst = "BESPLATNO TESTIRANJE ČITANJA"
-        elif "MUDRO" in odabrani_opis:
-            cisti_opis_tekst = "BRZO ČITANJE I MUDRO UČENJE"
-            
-        st.info(f"Trenutno označeno: **{minute_trajanja} minuta - {cisti_opis_tekst}**")
+        tekst_programa = opcije_trajanja[odabrani_opis]
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
-            kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
+            # Generiranje točnog punog stringa za kalendar
+            novi_termin_puni = f"{novi_termin} ({tekst_programa})"
             
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
-            
-            preklapa_se = False
+            if novi_termin_puni in podaci.get("slobodni", []):
+                st.error("Ovaj termin već postoji kao slobodan!")
+            else:
+                podaci["slobodni"].append(novi_termin_puni)
+                spremi_podatke(podaci)
+                st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
+                st.rerun()
+
+        st.subheader("📋 Trenutno objavljeni slobodni termini (Moguće generirati 100+)")
+        if not podaci.get("slobodni", []):
+            st.info("Nema otvorenih slobodnih termina u sustavu.")
+        else:
+            for slobodan in sorted(podaci["slobodni"]):
+                col_s1, col_s2 = st.columns(2)
+                col_s1.write(f"🟢 {slobodan}")
+                if col_s2.button("Ukloni termin", key=f"rem_{slobodan}"):
+                    podaci["slobodni"].remove(slobodan)
 
