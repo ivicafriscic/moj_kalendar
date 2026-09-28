@@ -17,7 +17,7 @@ SMTP_SERVER = "74.125.140.108"
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
-EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
+EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciju
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
@@ -74,9 +74,9 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         
         for termin_str, info in list(podaci_baza["rezervirani"].items()):
             try:
-                # Sigurno vađenje čistog datuma bez ulaženja u zagrade i indekse
                 if " (" in termin_str:
-                    cisto_vrijeme = termin_str.split(" (")[0].strip()
+                    vrijeme_tekst = termin_str.split(" (")
+                    cisto_vrijeme = vrijeme_tekst[0].strip()
                     pocetak = datetime.strptime(cisto_vrijeme, "%d.%m.%Y. %H:%M")
                     if sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza.get("poslani_podsjetnici", []):
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
@@ -171,7 +171,6 @@ with tab2:
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
         odabrano_vrijeme = col_v.selectbox("2. Odaberite vrijeme početka:", sati_opcije)
         
-        # PROMJENA: Stabilan i siguran radio gumb koji ne gubi stanje prilikom klika na spremanje
         st.write("3. Odaberite trajanje lekcije:")
         opcije_trajanja = {
             "35 minuta - POMOĆ U ČITANJU": 35,
@@ -186,8 +185,8 @@ with tab2:
             kraj_dt = pocetak_dt + timedelta(minutes=minute_trajanja)
             
             # Formiranje naziva termina strictly u obliku DD.MM.GGGG. HH:MM
-            cisti_opis_tekst = odabrani_opis.split(" - ")[1]
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
+            cisti_opis_tekst = odabrani_opis.split(" - ")
+            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst[1]})"
             
             preklapa_se = False
             svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
@@ -195,12 +194,15 @@ with tab2:
             for postojeci in svi_postojeci_termini:
                 try:
                     if " (" in postojeci:
-                        v_poddio = postojeci.split(" (")[0].strip()
-                        p_pocetak = datetime.strptime(v_poddio, "%d.%m.%Y. %H:%M")
+                        v_poddio = postojeci.split(" (")
+                        c_vrijeme = v_poddio[0].strip()
+                        p_pocetak = datetime.strptime(c_vrijeme, "%d.%m.%Y. %H:%M")
                         
-                        # Izvlačenje trajanja bez korištenja riskantnih zagrada iz chata
-                        t_poddio = postojeci.split(" min")[0].split("(")[1].strip()
-                        p_kraj = p_pocetak + timedelta(minutes=int(t_poddio))
+                        t_poddio = postojeci.split(" min")
+                        t_poddio_lijevo = t_poddio[0].split("(")
+                        t_min = int(t_poddio_lijevo[1].strip())
+                        
+                        p_kraj = p_pocetak + timedelta(minutes=t_min)
                         
                         if max(pocetak_dt, p_pocetak) < min(kraj_dt, p_kraj):
                             preklapa_se = True
@@ -208,3 +210,4 @@ with tab2:
                 except:
                     continue
             
+            if preklapa_se:
