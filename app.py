@@ -8,7 +8,6 @@ import urllib.parse
 import os
 import json
 
-# Trajna lokalna datoteka na samom poslužitelju Streamlita
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
@@ -35,7 +34,7 @@ def spremi_trajne_podatke(podaci):
     except:
         pass
 
-# --- INICIJALIZACIJA STRUКТURE ---
+# --- INICIJALIZACIJA LOKALNE MEMORIJE ---
 if "baza_lokalna" not in st.session_state:
     st.session_state.baza_lokalna = ucitaj_trajne_podatke()
 
@@ -91,17 +90,18 @@ def provjeri_i_posalji_podsjetnike_brzo():
         za_cetiri_sata = sada + timedelta(hours=4)
         promjena = False
         
-        for k in list(baza.get("rezervirani", {}).keys()):
+        rezervirani_lista = list(baza.get("rezervirani", {}).keys())
+        for stavka in rezervirani_lista:
             try:
-                cisto_vrijeme = k[:16]
+                cisto_vrijeme = stavka[:16]
                 pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
-                if sada < pocetak <= za_cetiri_sata and k not in baza.get("podsjetnici", []):
-                    info = baza.get("rezervirani", {}).get(k)
+                if sada < pocetak <= za_cetiri_sata and stavka not in baza.get("podsjetnici", []):
+                    info = baza.get("rezervirani", {}).get(stavka)
                     if info:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
+                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {stavka}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
                         if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            baza["podsjetnici"].append(k)
+                            baza["podsjetnici"].append(stavka)
                             promjena = True
             except:
                 continue
@@ -217,5 +217,3 @@ with tab2:
         if not baza.get("slobodni", []):
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
-            for slobodan in sorted(baza["slobodni"]):
-
