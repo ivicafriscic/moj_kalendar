@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import io
 import openpyxl
 import urllib.parse
@@ -12,7 +13,7 @@ DATOTEKA_PODATAKA = "podaci.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "smtp.gmail.com"             
+SMTP_SERVER = "74.125.140.108"              
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
@@ -38,32 +39,54 @@ def spremi_podatke(podaci_za_spremiti):
     with open(DATOTEKA_PODATAKA, "w", encoding="utf-8") as f:
         json.dump(podaci_za_spremiti, f, indent=4, ensure_ascii=False)
 
-def posalji_email_genericki(primatelj, naslov, tekst):
+def posalji_email_s_kalendarom(primatelj_vlasnik, primatelj_klijent, naslov, tekst_vlasnik, tekst_klijent, termin_str, ime_klijenta, email_klijenta):
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
-        msg = MIMEText(tekst, "plain", "utf-8")
-        msg["Subject"] = naslov
-        msg["From"] = MOJ_EMAIL
-        msg["To"] = primatelj
-        server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
+        
+        # --- GENERIRANJE ICS DATOTEKE ZA AUTOMATSKI UPIS U GOOGLE KALENDAR ---
+        try:
+            cisto_vrijeme = termin_str[:16]
+            dt_pocetak = datetime.strptime(cisto_vrijeme, "%Y-%m-%d %H:%M")
+            t_trajanje = 45
+            if "35 min" in termin_str: t_trajanje = 35
+            elif "90 min" in termin_str: t_trajanje = 90
+            dt_kraj = dt_pocetak + timedelta(minutes=t_trajanje)
+            
+            fmt_start = dt_pocetak.strftime("%Y%m%dT%H%M%S")
+            fmt_end = dt_kraj.strftime("%Y%m%dT%H%M%S")
+            
+            ics_sadrzaj = f"BEGIN:VCALENDAR\nVERSION:2.0\nMETHOD:REQUEST\nBEGIN:VEVENT\nUID:skola_{fmt_start}@kreovz\nDTSTART:{fmt_start}\nDTEND:{fmt_end}\nSUMMARY:Nastava: {ime_klijenta}\nDESCRIPTION:Polaznik: {ime_klijenta} ({email_klijenta})\\nOpis: {termin_str}\nEND:VEVENT\nEND:VCALENDAR"
+        except:
+            ics_sadrzaj = None
+
+        # 1. SLANJE VLASNIKU (ŠKOLI) S PRIVITKOM ZA KALENDAR
+        msg_vlasnik = MIMEMultipart("mixed") if ics_sadrzaj else MIMEMultipart("alternative")
+        msg_vlasnik["Subject"] = naslov
+        msg_vlasnik["From"] = MOJ_EMAIL
+        msg_vlasnik["To"] = primatelj_vlasnik
+        msg_vlasnik.attach(MIMEText(tekst_vlasnik, "plain", "utf-8"))
+        
+        if ics_sadrzaj:
+            part_cal = MIMEText(ics_sadrzaj, "calendar; method=REQUEST; charset=\"UTF-8\"")
+            part_cal.add_header("Content-Disposition", "attachment; filename=\"termin.ics\"")
+            msg_vlasnik.attach(part_cal)
+            
+        server.sendmail(MOJ_EMAIL, [primatelj_vlasnik], msg_vlasnik.as_string())
+        
+        # 2. SLANJE KLIJENTU (POTVRDA)
+        msg_klijent = MIMEText(tekst_klijent, "plain", "utf-8")
+        msg_klijent["Subject"] = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
+        msg_klijent["From"] = MOJ_EMAIL
+        msg_klijent["To"] = primatelj_klijent
+        server.sendmail(MOJ_EMAIL, [primatelj_klijent], msg_klijent.as_string())
+        
         server.quit()
         return True
     except Exception as e:
         print(f"Greška pri slanju emaila: {e}")
         return False
-
-def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
-    naslov_ponudac = f"Nova rezervacija termina: {termin}"
-    tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}\n\nLijep pozdrav,\nVaš Web Sustav"
-    
-    naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
-    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-    
-    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return ok_vlasnik and ok_klijent
 
 def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
     try:
@@ -80,9 +103,16 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
                     if info:
                         naslov_podsjetnik = "Podsjetnik na Vaš termin"
                         tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
-                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            podaci_baza["poslani_podsjetnici"].append(k)
-                            promjena = True
+                        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+                        server.login(MOJ_EMAIL, MOJA_LOZINKA)
+                        msg = MIMEText(tekst_podsjetnik, "plain", "utf-8")
+                        msg["Subject"] = naslov_podsjetnik
+                        msg["From"] = MOJ_EMAIL
+                        msg["To"] = info["email"]
+                        server.sendmail(MOJ_EMAIL, [info["email"]], msg.as_string())
+                        server.quit()
+                        podaci_baza["poslani_podsjetnici"].append(k)
+                        promjena = True
             except:
                 continue
         if promjena:
@@ -90,7 +120,7 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
     except Exception as e:
         print(f"Greška u podsjetnicima: {e}")
 
-# --- INICIJALIZACIJA I UKLANJANJE TISKARSKE GREŠKE ---
+# --- INICIJALIZACIJA ---
 podaci = ucitaj_podatke()
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
@@ -133,8 +163,13 @@ with tab1:
                 else:
                     podaci["slobodni"].remove(termin)
                     podaci["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
+                    
+                    tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime}\nE-mail klijenta: {email_kupca}\n\nLijep pozdrav,\nVaš Web Sustav"
+                    tekst_klijent = f"Poštovani/a {ime},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                    
                     with st.spinner("Slanje e-mail obavijesti..."):
-                        slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                        slanje_uspjelo = posalji_email_s_kalendarom(EMAIL_PONUDACA, email_kupca, f"Nova rezervacija termina: {termin}", tekst_ponudac, tekst_klijent, termin, ime, email_kupca)
+                    
                     if slanje_uspjelo:
                         spremi_podatke(podaci)
                         st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
@@ -170,42 +205,3 @@ with tab2:
             podaci["rezervirani"] = {}
             podaci["poslani_podsjetnici"] = []
             spremi_podatke(podaci)
-            st.warning("Baza podataka je u potpunosti obrisana!")
-            st.rerun()
-
-        # Vraćanje klasičnog tekstualnog unosa s izvornim formatom datuma
-        novi_termin = st.text_input("Unesite termin u starom formatu (Format: GGGG-MM-DD HH:MM):", value=datetime.now().strftime("%Y-%m-%d %H:%M"))
-        
-        st.write("Odaberite program lekcije:")
-        opcije_trajanja = {
-            "35 minuta - POMOĆ U ČITANJU": "35 min - POMOĆ U ČITANJU",
-            "45 minuta - BESPLATNO TESTIRANJE ČITANJA": "45 min - BESPLATNO TESTIRANJE ČITANJA",
-            "90 minuta - BRZO ČITANJE I MUDRO UČENJE": "90 min - BRZO ČITANJE I MUDRO UČENJE"
-        }
-        odabrani_opis = st.radio("Označite željeni program:", list(opcije_trajanja.keys()))
-        tekst_programa = opcije_trajanja[odabrani_opis]
-        
-        if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            # Generiranje točnog punog stringa za kalendar (UKLONJENA PROVJERA PREKLAPANJA)
-            novi_termin_puni = f"{novi_termin} ({tekst_programa})"
-            
-            if novi_termin_puni in podaci.get("slobodni", []):
-                st.error("Ovaj termin već postoji kao slobodan!")
-            else:
-                podaci["slobodni"].append(novi_termin_puni)
-                spremi_podatke(podaci)
-                st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
-                st.rerun()
-
-        st.subheader("📋 Trenutno objavljeni slobodni termini (Moguće generirati 100+)")
-        if not podaci.get("slobodni", []):
-            st.info("Nema otvorenih slobodnih termina u sustavu.")
-        else:
-            for slobodan in sorted(podaci["slobodni"]):
-                col_s1, col_s2 = st.columns(2)
-                col_s1.write(f"🟢 {slobodan}")
-                if col_s2.button("Ukloni termin", key=f"rem_{slobodan}"):
-                    podaci["slobodni"].remove(slobodan)
-                    spremi_podatke(podaci)
-                    st.warning(f"Slobodan termin {slobodan} je trajno uklonjen.")
-
