@@ -73,19 +73,23 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
         sada = datetime.now()
         za_cetiri_sata = sada + timedelta(hours=4)
         
-        for k, v in list(podaci_baza.get("metapodaci", {}).items()):
-            try:
-                pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
-                if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
-                    info = podaci_baza["rezervirani"].get(k)
-                    if info:
-                        naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                        tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
-                        if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
-                            podaci_baza["poslani_podsjetnici"].append(k)
-                            promjena = True
-            except:
-                continue
+        meta = podaci_baza.get("metapodaci", {})
+        for k in list(meta.keys()):
+            v = meta.get(k, {})
+            pocetak_str = v.get("pocetak", "")
+            if pocetak_str:
+                try:
+                    pocetak = datetime.strptime(pocetak_str, "%Y-%m-%d %H:%M")
+                    if sada < pocetak <= za_cetiri_sata and k not in podaci_baza.get("poslani_podsjetnici", []):
+                        info = podaci_baza["rezervirani"].get(k)
+                        if info:
+                            naslov_podsjetnik = "Podsjetnik na Vaš termin"
+                            tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {k}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nVaš KREO tim"
+                            if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
+                                podaci_baza["poslani_podsjetnici"].append(k)
+                                promjena = True
+                except:
+                    continue
         if promjena:
             spremi_podatke(podaci_baza)
     except Exception as e:
@@ -207,7 +211,4 @@ with tab2:
             novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y.')} {pocetak_dt.strftime('%H:%M')} ({minute_trajanja} min - {cisti_opis_tekst})"
             
             preklapa_se = False
-            for k, v in podaci.get("metapodaci", {}).items():
-                try:
-                    p_pocetak = datetime.strptime(v.get("pocetak"), "%Y-%m-%d %H:%M")
-                    p_kraj = datetime.strptime(v.get("kraj"), "%Y-%m-%d %H:%M")
+            meta_provjera = podaci.get("metapodaci", {})
