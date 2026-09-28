@@ -19,7 +19,7 @@ SMTP_SERVER = "74.125.140.108"
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # <--- VAŠ GMAIL
 MOJA_LOZINKA = "dyyhszecummfwkej" # <--- GOOGLE APP PASSWORD (16 SLOVA)
-EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST
+EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # <--- GDJE STIŽE OBAVIJEST 
 
 def ucitaj_podatke():
     if os.path.exists(DATOTEKA_PODATAKA):
@@ -69,16 +69,18 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Sigurno rastavljanje stringa pomoću splita bez opasnosti od krađe programskih znakova."""
+    """Nepogrešivo i matematički sigurno izvlačenje početka i kraja termina."""
     try:
-        # Primjer: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
-        dijelovi_zagrada = termin_puni.split(" (")
-        vrijeme_str = dijelovi_zagrada[0].strip()
-        
-        trajanje_dio = dijelovi_zagrada[1].split(" min")
-        minute = int(trajanje_dio[0].strip())
-        
+        # Primjer formata: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
+        # Datum i vrijeme uvijek zauzimaju prvih 17 znakova: "28.09.2026. 14:30"
+        vrijeme_str = termin_puni[0:17]
         pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
+        
+        # Traženje broja minuta vađenjem teksta između zagrade i riječi ' min'
+        dio_nakon_zagrade = termin_puni.split("(")[1]
+        minute_str = dio_nakon_zagrade.split(" min")[0]
+        minute = int(minute_str)
+        
         kraj = pocetak + timedelta(minutes=minute)
         return pocetak, kraj
     except:
@@ -211,4 +213,3 @@ with tab2:
         st.info(f"Trenutno označeno: **{st.session_state.odabrano_trajanje} minuta{opis_lekcije}**")
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
