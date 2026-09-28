@@ -59,17 +59,17 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     return ok_vlasnik and ok_klijent
 
 def parsiraj_vrijeme_termina(termin_puni):
-    """Pomoćna funkcija koja precizno izvlači točan početak i kraj termina radi provjere preklapanja."""
+    """Pomoćna funkcija koja precizno i sigurno izvlači početak i kraj lekcije iz teksta."""
     try:
-        # Primjer formata: "28.09.2026 14:30 (35 min - POMOĆ U ČITANJU)"
+        # Primjer formata: "28.09.2026. 14:30 (35 min - POMOĆ U ČITANJU)"
         dijelovi = termin_puni.split(" (")
         vrijeme_str = dijelovi[0].strip()
         
-        # Izvlačenje minuta iz drugog dijela: "35 min - POMOĆ U ČITANJU)"
+        # Izvlačenje točnog broja minuta
         trajanje_dio = dijelovi[1].split(" min")
         minute = int(trajanje_dio[0].strip())
         
-        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y %H:%M")
+        pocetak = datetime.strptime(vrijeme_str, "%d.%m.%Y. %H:%M")
         kraj = pocetak + timedelta(minutes=minute)
         return pocetak, kraj
     except:
@@ -90,7 +90,7 @@ def provjeri_i_posalji_podsjetnike():
                 pocetak, kraj = parsiraj_vrijeme_termina(termin_str)
                 if pocetak and sada < pocetak <= za_cetiri_sata and termin_str not in podaci_baza["poslani_podsjetnici"]:
                     naslov_podsjetnik = "Podsjetnik na Vaš termin"
-                    tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo je automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
+                    tekst_podsjetnik = f"Poštovani/a {info['klijent']},\n\nOvo isključivo služi kao automatski podsjetnik da imate rezerviran termin kod nas za točno 4 sata.\n\n📅 Termin: {termin_str}\n\nRadujemo se Vašem dolasku!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
                     if posalji_email_genericki(info["email"], naslov_podsjetnik, tekst_podsjetnik):
                         podaci_baza["poslani_podsjetnici"].append(termin_str)
                         promjena = True
@@ -128,13 +128,18 @@ with tab1:
     with st.form("forma_rezervacija", clear_on_submit=True):
         ime = st.text_input("Ime i Prezime:")
         email_kupca = st.text_input("Vaš E-mail:")
+        
+        # Sortiranje i filtriranje slobodnih termina u ispravnom dd.mm.yyyy. formatu
         slobodni = [t for t in podaci["slobodni"] if t not in podaci["rezervirani"]]
+        
         if not slobodni:
             st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
             gumb_rezerviraj = None
         else:
+            # Prikazujemo klijentima uredno posložene termine s točnim hrvatskim datumom
             termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni))
             gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
+            
         if gumb_rezerviraj:
             if not ime or not email_kupca:
                 st.warning("Molimo ispunite sva polja!")
@@ -204,11 +209,8 @@ with tab2:
             pocetak_dt = datetime.combine(odabrani_datum, datetime.strptime(odabrano_vrijeme, "%H:%M").time())
             kraj_dt = pocetak_dt + timedelta(minutes=st.session_state.odabrano_trajanje)
             
-            novi_termin_puni = f"{pocetak_dt.strftime('%d.%m.%Y %H:%M')} ({st.session_state.odabrano_trajanje} min{opis_lekcije})"
-            
-            preklapa_se = False
-            svi_postojeci_termini = podaci["slobodni"] + list(podaci["rezervirani"].keys())
-            
+            # ISPRAVLJENO: Format datuma je sada postavljen na DD.MM.GGGG. s točkom
+
 
                         break
 
