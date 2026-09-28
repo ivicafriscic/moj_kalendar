@@ -55,7 +55,6 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
-    # Generiranje dinamičkog Google kalendarskog linka za e-mail obavijest
     try:
         cisto_v_cal = termin[:16]
         p_pocetak = datetime.strptime(cisto_v_cal, "%Y-%m-%d %H:%M")
@@ -74,7 +73,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         dodatak_link = ""
 
     naslov_ponudac = f"Nova rezervacija termina: {termin}"
-    tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime}\nE-mail klijenta: {email_klijenta}{dodatak_link}\n\nLijep pozdrav,\nVaš Web Sustav"
+    tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}{dodatak_link}\n\nLijep pozdrav,\nVaš Web Sustav"
     
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
@@ -108,7 +107,7 @@ def provjeri_i_posalji_podsjetnike_brzo(podaci_baza):
     except Exception as e:
         print(f"Greška u podsjetnicima: {e}")
 
-# --- INICIJALIZACIJA BAZE PODATAKA (ISPRAVLJENA TISKARSKA GREŠKA) ---
+# --- INICIJALIZACIJA BAZE PODATAKA ---
 podaci = ucitaj_podatke()
 provjeri_i_posalji_podsjetnike_brzo(podaci)
 
@@ -191,7 +190,7 @@ with tab2:
             st.warning("Baza podataka je u potpunosti obrisana!")
             st.rerun()
 
-        # VRAĆEN BRZI GRAFIČKI ODABIR DATUMA I VREMENA
+        # Brzi grafički odabir datuma i vremena natrag u kodu
         col_d, col_v = st.columns(2)
         odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
         sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
@@ -208,3 +207,5 @@ with tab2:
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
             vrijeme_iso = f"{odabrani_datum} {odabrano_vrijeme}"
+            novi_termin_puni = f"{vrijeme_iso} ({tekst_programa})"
+            
