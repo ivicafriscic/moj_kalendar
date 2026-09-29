@@ -217,30 +217,3 @@ with tab2:
             st.dataframe(slobodni_lista_prikaz, use_container_width=True)
             termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_lista_prikaz))
             if st.button("❌ Trajno ukloni odabrani slobodan termin"):
-                baza["slobodni"].remove(termin_za_uklanjanje)
-                spremi_trajne_podatke(baza)
-                st.warning(f"Slobodan termin {termin_za_uklanjanje} je uspješno obrisan.")
-                st.rerun()
-
-        st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
-        rezervirani_tablica = baza.get("rezervirani", {})
-        if not rezervirani_tablica:
-            st.info("Nema rezerviranih termina.")
-        else:
-            prikaz_rezervacija = []
-            for t, info in rezervirani_tablica.items():
-                prikaz_rezervacija.append({"Termin nastave": t, "Klijent": info["klijent"], "E-mail": info["email"]})
-            st.dataframe(prikaz_rezervacija, use_container_width=True)
-            
-            termin_za_otkazivanje = st.selectbox("Odaberite rezervaciju ako je želite otkazati:", sorted(list(rezervirani_tablica.keys())))
-            if st.button("❌ Trajno otkaži odabranu rezervaciju"):
-                baza["slobodni"].append(termin_za_otkazivanje)
-                del baza["rezervirani"][termin_za_otkazivanje]
-                if termin_za_otkazivanje in baza.get("podsjetnici", []):
-                    baza["podsjetnici"].remove(termin_za_otkazivanje)
-                spremi_trajne_podatke(baza)
-                st.warning(f"Rezervacija {termin_za_otkazivanje} je uspješno otkazana.")
-                st.rerun()
-            
-    elif upisana_lozinka != "":
-        st.error("Pogrešna lozinka!")
