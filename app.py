@@ -56,35 +56,115 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         print(f"Greška pri slanju emaila: {e}")
         return False
 
+```python
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     try:
+        # Uzimamo datum i vrijeme iz početka termina
         cisto_v_cal = termin[:16]
         p_pocetak = datetime.strptime(cisto_v_cal, "%Y-%m-%d %H:%M")
+
+        # Zadano trajanje je 45 minuta
         t_trajanje = 45
-        if "35 min" in termin: t_trajanje = 35
-        elif "90 min" in termin: t_trajanje = 90
+
+        if "35 min" in termin:
+            t_trajanje = 35
+        elif "90 min" in termin:
+            t_trajanje = 90
+
         p_kraj = p_pocetak + timedelta(minutes=t_trajanje)
-        
+
+        # Google Calendar format datuma
         g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
         g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
-        g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
-        g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
-        
-        # TOČAN I PROVJEREN URL ZA GOOGLE KALENDAR
-        google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
-        dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
-    except:
+
+        # Podaci za Google Calendar
+        g_naslov = urllib.parse.quote(
+            f"Nastava: {ime_klijenta}"
+        )
+
+        g_opis = urllib.parse.quote(
+            f"Polaznik: {ime_klijenta}\n"
+            f"Termin: {termin}"
+        )
+
+        # Ispravan Google Calendar link
+        google_cal_link = (
+            "https://calendar.google.com/calendar/render"
+            "?action=TEMPLATE"
+            f"&text={g_naslov}"
+            f"&dates={g_start}/{g_end}"
+            f"&details={g_opis}"
+        )
+
+        dodatak_link = (
+            "\n\n"
+            "📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n"
+            f"{google_cal_link}"
+        )
+
+    except (ValueError, TypeError, IndexError):
+        # Ako termin nije u očekivanom formatu,
+        # email se i dalje šalje bez Calendar linka.
         dodatak_link = ""
 
+    # ---------------------------------------------------------
+    # EMAIL VLASNIKU / PONUDITELJU
+    # ---------------------------------------------------------
+
     naslov_ponudac = f"Nova rezervacija termina: {termin}"
-    tekst_ponudac = f"Pozdrav,\n\nImate novu rezervaciju!\n\nTermin: {termin}\nKlijent: {ime_klijenta}\nE-mail klijenta: {email_klijenta}{dodatak_link}\n\nLijep pozdrav,\nVaš Web Sustav"
-    
-    naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
-    tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
-    
-    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+
+    tekst_ponudac = (
+        f"Pozdrav,\n\n"
+        f"Imate novu rezervaciju!\n\n"
+        f"Termin: {termin}\n"
+        f"Klijent: {ime_klijenta}\n"
+        f"E-mail klijenta: {email_klijenta}"
+        f"{dodatak_link}\n\n"
+        f"Lijep pozdrav,\n"
+        f"Vaš Web Sustav"
+    )
+
+    # ---------------------------------------------------------
+    # EMAIL KLIJENTU
+    # ---------------------------------------------------------
+
+    naslov_klijent = (
+        "Potvrda rezervacije termina - "
+        "Škola brzog čitanja i mudrog učenja Varaždin"
+    )
+
+    tekst_klijent = (
+        f"Poštovani/a {ime_klijenta},\n\n"
+        f"Ovim putem potvrđujemo Vašu rezervaciju termina.\n\n"
+        f"Detalji:\n"
+        f"📅 Termin: {termin}"
+        f"{dodatak_link}\n\n"
+        f"U slučaju bilo kakvih promjena ili dodatnih pitanja, "
+        f"slobodno nas kontaktirajte odgovaranjem na ovaj mail "
+        f"ili putem naših društvenih mreža.\n\n"
+        f"Hvala Vam na povjerenju!\n\n"
+        f"Srdačan pozdrav,\n"
+        f"Škola brzog čitanja i mudrog učenja Varaždin"
+    )
+
+    # ---------------------------------------------------------
+    # SLANJE EMAILOVA
+    # ---------------------------------------------------------
+
+    ok_vlasnik = posalji_email_genericki(
+        EMAIL_PONUDACA,
+        naslov_ponudac,
+        tekst_ponudac
+    )
+
+    ok_klijent = posalji_email_genericki(
+        email_klijenta,
+        naslov_klijent,
+        tekst_klijent
+    )
+
     return ok_vlasnik and ok_klijent
+```
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
