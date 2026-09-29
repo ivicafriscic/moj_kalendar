@@ -15,7 +15,7 @@ ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # POPRAVLJENO: Točna Google lozinka aplikacije (završava na j)
+MOJA_LOZINKA = "dyyhszecummfwkej"             # Točna Google lozinka aplikacije (završava na j)
 EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
@@ -111,6 +111,7 @@ def provjeri_i_posalji_podsjetnike_brzo():
     except:
         pass
 
+# Automatska tiha provjera podsjetnika pri svakom posjetu stranici
 provjeri_i_posalji_podsjetnike_brzo()
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
@@ -210,11 +211,10 @@ with tab2:
                 st.error("Ovaj termin već postoji kao slobodan!")
             else:
                 baza["slobodni"].append(novi_termin_puni)
+                # ISPRAVLJENO: Potpuno spojena i ispravno zatvorena funkcija spremanja
                 spremi_trajne_podatke(baza)
                 st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
                 st.rerun()
 
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        slobodni_lista_prikaz = baza.get("slobodni", [])
-        if not slobodni_lista_prikaz:
 
