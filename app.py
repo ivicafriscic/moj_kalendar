@@ -12,11 +12,11 @@ DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
 # --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "74.125.140.108"              
+SMTP_SERVER = "smtp.gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
 MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
-EMAIL_PONUDACA = "brzocitanjeiucenjevz@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
+EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
     if os.path.exists(DATOTEKA_BAZE):
