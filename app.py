@@ -9,8 +9,9 @@ import json
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"
 
+# --- POPRAVLJENI I SIGURNI GMAIL PARAMETRI ---
 SMTP_SERVER = "://gmail.com"             
-SMTP_PORT = 465
+SMTP_PORT = 587  # Prebačeno na TLS port za sigurnu dostavu
 MOJ_EMAIL = "ana.koren1@gmail.com"            
 MOJA_LOZINKA = "dyyhszecummfwkej"             
 EMAIL_PONUDACA = "friscicivica69@gmail.com" 
@@ -41,13 +42,18 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
+        
+        # IMPLEMENTIRAN SIGURNI TLS PROTOKOL KOJI PROLAZI KROZ GMAIL FILTRE
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+        server.ehlo()
+        server.starttls()  # Ključna naredba za autorizaciju aplikacije na Googleu
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
-    except:
+    except Exception as e:
+        print(f"SMTP Greška pri slanju: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime, mail_kl):
@@ -152,7 +158,7 @@ with tab2:
                 st.session_state.admin_uspjeh = f"Kreirano: {novi}"
                 st.rerun()
         st.subheader("📋 Slobodni termini")
-        st.write(baza.get("slobodni", []))
+        st.dataframe(baza.get("slobodni", []), use_container_width=True)
         st.subheader("📋 Rezervirani termini")
         st.write(baza.get("rezervirani", {}))
     elif upisana_lozinka != "":
