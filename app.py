@@ -2,8 +2,6 @@ import streamlit as st
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
-import io
-import openpyxl
 import urllib.parse
 import os
 import json
@@ -243,23 +241,6 @@ with tab2:
                 spremi_trajne_podatke(baza)
                 st.warning(f"Rezervacija {termin_za_otkazivanje} je uspješno otkazana.")
                 st.rerun()
-            
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.title = "Rezervacije"
-            ws.append(["Datum i Vrijeme", "Ime i Prezime", "E-mail klijenta"])
-            for t, info in rezervirani_tablica.items():
-                ws.append([t, info['klijent'], info['email']])
-            
-            excel_data = io.BytesIO()
-            wb.save(excel_data)
-            excel_data.seek(0)
-            st.download_button(
-                label="📥 Preuzmi Excel tablicu rezervacija",
-                data=excel_data,
-                file_name=f"rezervacije_{datetime.now().strftime('%d.%m.%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
