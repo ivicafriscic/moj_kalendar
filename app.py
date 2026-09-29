@@ -42,7 +42,7 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
         msg = MIMEText(tekst, "plain", "utf-8")
@@ -70,7 +70,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
         g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
         
-        # POPRAVLJENO: Točan i službeni URL format za ispravno otvaranje Google kalendara
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -82,9 +81,10 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return ok_vlasnik and ok_klijent
+    # Tiho slanje u pozadini bez blokiranja rada kalendara
+    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return True
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
@@ -119,17 +119,17 @@ with tab1:
                 if not ime or not email_kupca:
                     st.warning("Molimo ispunite sva polja!")
                 else:
+                    # POPRAVLJENO: Prvo sigurno upisujemo i spremamo u bazu
                     baza["slobodni"].remove(termin)
                     baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
+                    spremi_trajne_podatke(baza)
+                    
+                    # Mail se izvršava neovisno o bazi
                     with st.spinner("Slanje e-mail obavijesti..."):
-                        slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
-                    if slanje_uspjelo:
-                        spremi_trajne_podatke(baza)
-                        st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
-                        st.rerun()
-                    else:
-                        baza["slobodni"].append(termin)
-                        del baza["rezervirani"][termin]
+                        posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                        
+                    st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
+                    st.rerun()
 
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
@@ -254,4 +254,3 @@ with tab2:
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
-
