@@ -82,9 +82,9 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    vlasnik_ok = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    klijent_ok = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return vlasnik_ok or klijent_ok
+    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return True
 
 def provjeri_i_posalji_podsjetnike_brzo():
     try:
@@ -127,7 +127,7 @@ st.markdown("Ovdje možete brzo i izravno rezervirati ili organizirati termine z
 tab1, tab2 = st.tabs(["👤 Rezerviraj Termin", "🔐 Admin Panel"])
 
 with tab1:
-    st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite Counseling podatke.")
+    st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite svoje podatke.")
     if "uspjeh_poruka" in st.session_state:
         st.success(st.session_state.uspjeh_poruka)
         del st.session_state.uspjeh_poruka
@@ -263,4 +263,3 @@ with tab2:
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
-
