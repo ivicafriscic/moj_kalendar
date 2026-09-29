@@ -13,7 +13,7 @@ ADMIN_LOZINKA = "Ivo"
 
 # --- MODERNI I SIGURNI GMAIL TLS PARAMETRI ---
 SMTP_SERVER = "://gmail.com"             
-SMTP_PORT = 587  # Promijenjeno na TLS port za sigurnu dostavu
+SMTP_PORT = 587  # Ispravan port za stabilnu TLS dostavu poruka
 MOJ_EMAIL = "ana.koren1@gmail.com"            
 MOJA_LOZINKA = "dyyhszecummfwkej"             
 EMAIL_PONUDACA = "friscicivica69@gmail.com" 
@@ -46,10 +46,10 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
         
-        # IMPLEMENTIRAN DOVRŠENI TLS PROTOKOL SA STARTTLS NAREDBOM
+        # POPRAVLJENO: Korištenje standardne SMTP naredbe umjesto stare SSL naredbe
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
         server.ehlo()
-        server.starttls()  # <--- Ključna naredba za Googleovu autorizaciju aplikacije
+        server.starttls()  # <--- Pokretanje obaveznog Googleovog kriptiranja veze
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
