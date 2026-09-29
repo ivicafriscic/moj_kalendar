@@ -56,7 +56,6 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         print(f"Greška pri slanju emaila: {e}")
         return False
 
-```python
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     try:
         # Uzimamo datum i vrijeme iz početka termina
@@ -164,7 +163,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     )
 
     return ok_vlasnik and ok_klijent
-```
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
