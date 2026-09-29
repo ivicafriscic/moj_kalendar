@@ -9,14 +9,14 @@ import os
 import json
 
 DATOTEKA_BAZE = "lokalna_baza.json"
-ADMIN_LOZINKA = "Ivo"
+ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
-# --- MODERNI I SIGURNI GMAIL TLS PARAMETRI ---
+# --- VAŠI TOČNI PODACI ZA GMAIL KOJI SU RADILI ---
 SMTP_SERVER = "://gmail.com"             
-SMTP_PORT = 587  # Ispravan port za stabilnu TLS dostavu poruka
-MOJ_EMAIL = "ana.koren1@gmail.com"            
-MOJA_LOZINKA = "dyyhszecummfwkej"             
-EMAIL_PONUDACA = "friscicivica69@gmail.com" 
+SMTP_PORT = 465
+MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
+MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
+EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
     if os.path.exists(DATOTEKA_BAZE):
@@ -34,6 +34,7 @@ def spremi_trajne_podatke(podaci):
     except:
         pass
 
+# --- INICIJALIZACIJA LOKALNE MEMORIJE ---
 if "baza_lokalna" not in st.session_state:
     st.session_state.baza_lokalna = ucitaj_trajne_podatke()
 
@@ -41,17 +42,13 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
+        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        server.ehlo()
+        server.login(MOJ_EMAIL, MOJA_LOZINKA)
         msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
-        
-        # POPRAVLJENO: Korištenje standardne SMTP naredbe umjesto stare SSL naredbe
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
-        server.ehlo()
-        server.starttls()  # <--- Pokretanje obaveznog Googleovog kriptiranja veze
-        server.ehlo()
-        server.login(MOJ_EMAIL, MOJA_LOZINKA)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
@@ -70,10 +67,10 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         
         g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
         g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
+        g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
+        g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
         
-        g_naslov = urllib.parse.quote(f"Nastava - {ime_klijenta}")
-        g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nTermin nastave: {termin}")
-        
+        # POPRAVLJENO: Točan i službeni URL format za ispravno otvaranje Google kalendara
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -257,3 +254,4 @@ with tab2:
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
+
