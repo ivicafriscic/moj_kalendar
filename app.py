@@ -11,8 +11,9 @@ import json
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"
 
+# --- MODERNI I SIGURNI GMAIL TLS PARAMETRI ---
 SMTP_SERVER = "://gmail.com"             
-SMTP_PORT = 465
+SMTP_PORT = 587  # Promijenjeno na TLS port za sigurnu dostavu
 MOJ_EMAIL = "ana.koren1@gmail.com"            
 MOJA_LOZINKA = "dyyhszecummfwkej"             
 EMAIL_PONUDACA = "friscicivica69@gmail.com" 
@@ -40,13 +41,17 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
-        server.ehlo()
-        server.login(MOJ_EMAIL, MOJA_LOZINKA)
         msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
+        
+        # IMPLEMENTIRAN DOVRŠENI TLS PROTOKOL SA STARTTLS NAREDBOM
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+        server.ehlo()
+        server.starttls()  # <--- Ključna naredba za Googleovu autorizaciju aplikacije
+        server.ehlo()
+        server.login(MOJ_EMAIL, MOJA_LOZINKA)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
@@ -66,7 +71,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
         g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
         
-        # POPRAVLJENO: Čisti tekstualni parametri bez zagrada za 100% stabilan rad Google kalendara
         g_naslov = urllib.parse.quote(f"Nastava - {ime_klijenta}")
         g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nTermin nastave: {termin}")
         
