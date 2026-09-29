@@ -217,4 +217,4 @@ with tab2:
         st.subheader("📋 Trenutno objavljeni slobodni termini")
         slobodni_lista_prikaz = baza.get("slobodni", [])
         if not slobodni_lista_prikaz:
-)
+
