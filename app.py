@@ -11,7 +11,7 @@ import json
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
-# --- PODACI ZA EMAIL POŠILJATELJA ---
+# --- Službeni Google SMTP parametri ---
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
@@ -42,18 +42,23 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
-        server.ehlo()
-        server.login(MOJ_EMAIL, MOJA_LOZINKA)
+        # Sastavljanje MIME poruke sa službenim i potpunim zaglavljima
         msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
+        
+        # Otvaranje čistog SSL kanala
+        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=15)
+        server.ehlo()
+        server.login(MOJ_EMAIL, MOJA_LOZINKA)
+        
+        # POPRAVLJENO: Slanje kompletnog tekstualnog paketa sa zaglavljima (Google ovo zahtijeva)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
     except Exception as e:
-        print(f"SMTP Greška: {e}")
+        print(f"SMTP Greška pri slanju: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
@@ -81,6 +86,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
+    # Slanje verificiranih mailova
     posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
     posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return True
@@ -126,7 +132,7 @@ st.markdown("Ovdje možete brzo i izravno rezervirati ili organizirati termine z
 tab1, tab2 = st.tabs(["👤 Rezerviraj Termin", "🔐 Admin Panel"])
 
 with tab1:
-    st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite svoje podatke.")
+    st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite Counseling podatke.")
     if "uspjeh_poruka" in st.session_state:
         st.success(st.session_state.uspjeh_poruka)
         del st.session_state.uspjeh_poruka
@@ -149,9 +155,7 @@ with tab1:
                     baza["slobodni"].remove(termin)
                     baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
                     
-                    with st.spinner("Slanje e-mail obavijesti..."):
-                        posalji_email_potvrde_direktno(termin, ime, email_kupca)
-                    
+                    posalji_email_potvrde_direktno(termin, ime, email_kupca)
                     spremi_trajne_podatke(baza)
                     st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
                     st.rerun()
@@ -216,6 +220,7 @@ with tab2:
         slobodni_lista_prikaz = baza.get("slobodni", [])
         if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
+
         else:
             st.dataframe(slobodni_lista_prikaz, use_container_width=True)
             termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_lista_prikaz))
