@@ -42,18 +42,14 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        # Sastavljanje MIME poruke sa službenim i potpunim zaglavljima
         msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
         
-        # Otvaranje čistog SSL kanala
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=15)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
-        
-        # POPRAVLJENO: Slanje kompletnog tekstualnog paketa sa zaglavljima (Google ovo zahtijeva)
         server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
         server.quit()
         return True
@@ -86,10 +82,9 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    # Slanje verificiranih mailova
-    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return True
+    vlasnik_ok = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    klijent_ok = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return vlasnik_ok or klijent_ok
 
 def provjeri_i_posalji_podsjetnike_brzo():
     try:
@@ -220,7 +215,52 @@ with tab2:
         slobodni_lista_prikaz = baza.get("slobodni", [])
         if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
-
         else:
             st.dataframe(slobodni_lista_prikaz, use_container_width=True)
             termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_lista_prikaz))
+            if st.button("❌ Trajno ukloni odabrani slobodan termin"):
+                baza["slobodni"].remove(termin_za_uklanjanje)
+                spremi_trajne_podatke(baza)
+                st.warning(f"Slobodan termin {termin_za_uklanjanje} je uspješno obrisan.")
+                st.rerun()
+
+        st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
+        rezervirani_tablica = baza.get("rezervirani", {})
+        if not rezervirani_tablica:
+            st.info("Nema rezerviranih termina.")
+        else:
+            prikaz_rezervacija = []
+            for t, info in rezervirani_tablica.items():
+                prikaz_rezervacija.append({"Termin nastave": t, "Klijent": info["klijent"], "E-mail": info["email"]})
+            st.dataframe(prikaz_rezervacija, use_container_width=True)
+            
+            termin_za_otkazivanje = st.selectbox("Odaberite rezervaciju ako je želite otkazati:", sorted(list(rezervirani_tablica.keys())))
+            if st.button("❌ Trajno otkaži odabranu rezervaciju"):
+                baza["slobodni"].append(termin_za_otkazivanje)
+                del baza["rezervirani"][termin_za_otkazivanje]
+                if termin_za_otkazivanje in baza.get("podsjetnici", []):
+                    baza["podsjetnici"].remove(termin_za_otkazivanje)
+                spremi_trajne_podatke(baza)
+                st.warning(f"Rezervacija {termin_za_otkazivanje} je uspješno otkazana.")
+                st.rerun()
+            
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Rezervacije"
+            ws.append(["Datum i Vrijeme", "Ime i Prezime", "E-mail klijenta"])
+            for t, info in rezervirani_tablica.items():
+                ws.append([t, info['klijent'], info['email']])
+            
+            excel_data = io.BytesIO()
+            wb.save(excel_data)
+            excel_data.seek(0)
+            st.download_button(
+                label="📥 Preuzmi Excel tablicu rezervacija",
+                data=excel_data,
+                file_name=f"rezervacije_{datetime.now().strftime('%d.%m.%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+    elif upisana_lozinka != "":
+        st.error("Pogrešna lozinka!")
+
