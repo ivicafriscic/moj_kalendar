@@ -15,7 +15,7 @@ ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
+MOJA_LOZINKA = "dyyhszecummfwkej"             # POPRAVLJENO: Točna Google lozinka aplikacije (završava na j)
 EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
@@ -70,7 +70,6 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
         g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
         
-        # POPRAVLJENO: Točna adresa za ispravno otvaranje Google kalendara
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -112,7 +111,6 @@ def provjeri_i_posalji_podsjetnike_brzo():
     except:
         pass
 
-# Automatska tiha provjera podsjetnika pri svakom posjetu stranici
 provjeri_i_posalji_podsjetnike_brzo()
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
@@ -217,3 +215,6 @@ with tab2:
                 st.rerun()
 
         st.subheader("📋 Trenutno objavljeni slobodni termini")
+        slobodni_lista_prikaz = baza.get("slobodni", [])
+        if not slobodni_lista_prikaz:
+)
