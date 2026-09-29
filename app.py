@@ -9,14 +9,13 @@ import os
 import json
 
 DATOTEKA_BAZE = "lokalna_baza.json"
-ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
+ADMIN_LOZINKA = "Ivo"
 
-# --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "smtp.gmail.com"             
+SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
-MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
-EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
+MOJ_EMAIL = "ana.koren1@gmail.com"            
+MOJA_LOZINKA = "dyyhszecummfwkej"             
+EMAIL_PONUDACA = "friscicivica69@gmail.com" 
 
 def ucitaj_trajne_podatke():
     if os.path.exists(DATOTEKA_BAZE):
@@ -34,7 +33,6 @@ def spremi_trajne_podatke(podaci):
     except:
         pass
 
-# --- INICIJALIZACIJA LOKALNE MEMORIJE ---
 if "baza_lokalna" not in st.session_state:
     st.session_state.baza_lokalna = ucitaj_trajne_podatke()
 
@@ -67,10 +65,11 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         
         g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
         g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
-        g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
-        g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
         
-        # POPRAVLJENO: Službena adresa Google kalendara koja provjereno radi bez greške IP adrese
+        # POPRAVLJENO: Čisti tekstualni parametri bez zagrada za 100% stabilan rad Google kalendara
+        g_naslov = urllib.parse.quote(f"Nastava - {ime_klijenta}")
+        g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nTermin nastave: {termin}")
+        
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -135,7 +134,7 @@ with tab1:
     st.subheader("🔗 Kontakt i društvene mreže")
     st.markdown("""
     Pratite naš rad ili nas kontaktirajte putem interneta:
-    * **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
+    * **Web stranica:** [://kreo-vz.com](https://://kreo-vz.com)
     * **Facebook:** [Škola brzog čitanja i mudrog učenja - Varaždin](https://facebook.com)
     * **Instagram:** [@skola_brzog_citanja_varazdin](https://instagram.com)
     """)
@@ -220,8 +219,8 @@ with tab2:
                     
                     g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
                     g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
-                    g_naslov = urllib.parse.quote(f"Nastava: {info['klijent']}")
-                    g_opis = urllib.parse.quote(f"Polaznik: {info['klijent']}\nOpis: {t}")
+                    g_naslov = urllib.parse.quote(f"Nastava - {info['klijent']}")
+                    g_opis = urllib.parse.quote(f"Polaznik: {info['klijent']}\nTermin: {t}")
                     google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
                     col_g1.markdown(f"[📅 Dodaj u Google kalendar]({google_cal_link})")
                 except:
@@ -254,4 +253,3 @@ with tab2:
             
     elif upisana_lozinka != "":
         st.error("Pogrešna lozinka!")
-
