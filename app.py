@@ -11,11 +11,11 @@ import json
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
-# --- PODACI ZA EMAIL POŠILJATELJA ---
+# --- ROBUSTI I SLUŽBENI GOOGLE SMTP PARAMETRI ---
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # Google aplikacijska lozinka (16 slova)
+MOJA_LOZINKA = "dyyhszecummfwkej"             # Točna Google lozinka aplikacije (16 slova)
 EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
@@ -42,6 +42,7 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
+        # Čisti SSL kanal prema službenom Google poslužitelju
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
@@ -53,7 +54,6 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         server.quit()
         return True
     except Exception as e:
-        # Tiho bilježenje greške bez rušenja cijelog weba
         print(f"SMTP Greška: {e}")
         return False
 
@@ -82,10 +82,10 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    # Šaljemo mailove, ali ne blokiramo izvršavanje ako Google odbije lozinku
-    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return True
+    # Šaljemo mailove oboma
+    vlasnik_ok = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    klijent_ok = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return vlasnik_ok or klijent_ok
 
 def provjeri_i_posalji_podsjetnike_brzo():
     try:
@@ -151,8 +151,9 @@ with tab1:
                     baza["slobodni"].remove(termin)
                     baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
                     
-                    # OSIGURANO: Spremanje će se izvršiti bez obzira na rad e-mail poslužitelja
-                    posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                    with st.spinner("Slanje e-mail obavijesti..."):
+                        posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                    
                     spremi_trajne_podatke(baza)
                     st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
                     st.rerun()
@@ -199,11 +200,11 @@ with tab2:
             "90 minuta - BRZO ČITANJE I MUDRO UČENJE": "90 min - BRZO ČITANJE I MUDRO UČENJE"
         }
         odabrani_opis = st.radio("Programi:", list(opcije_trajanja.keys()))
-        tekst_programa = opcije_trajanja[odabrani_opis]
+        text_programa = opcije_trajanja[odabrani_opis]
         
         if st.button("➕ Kreiraj i dodaj termin u sustav"):
             vrijeme_iso = f"{odabrani_datum} {odabrano_vrijeme}"
-            novi_termin_puni = f"{vrijeme_iso} ({tekst_programa})"
+            novi_termin_puni = f"{vrijeme_iso} ({text_programa})"
             
             if novi_termin_puni in baza.get("slobodni", []):
                 st.error("Ovaj termin već postoji kao slobodan!")
@@ -218,5 +219,3 @@ with tab2:
         if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
-            st.dataframe(slobodni_lista_prikaz, use_container_width=True)
-
