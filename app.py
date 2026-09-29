@@ -11,7 +11,7 @@ import json
 DATOTEKA_BAZE = "lokalna_baza.json"
 ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 
-# --- ROBUSTI I SLUŽBENI GOOGLE SMTP PARAMETRI ---
+# --- PODACI ZA EMAIL POŠILJATELJA ---
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
@@ -27,10 +27,10 @@ def ucitaj_trajne_podatke():
             pass
     return {"slobodni": [], "rezervirani": {}, "podsjetnici": []}
 
-def spremi_trajne_podatke(podaci):
+def spremi_trajne_podatke(podaci_za_bazu):
     try:
         with open(DATOTEKA_BAZE, "w", encoding="utf-8") as f:
-            json.dump(podaci, f, indent=4, ensure_ascii=False)
+            json.dump(podaci_za_bazu, f, indent=4, ensure_ascii=False)
     except:
         pass
 
@@ -42,7 +42,6 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        # Čisti SSL kanal prema službenom Google poslužitelju
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
@@ -82,10 +81,9 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    # Šaljemo mailove oboma
-    vlasnik_ok = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    klijent_ok = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return vlasnik_ok or klijent_ok
+    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return True
 
 def provjeri_i_posalji_podsjetnike_brzo():
     try:
@@ -219,3 +217,5 @@ with tab2:
         if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
+            st.dataframe(slobodni_lista_prikaz, use_container_width=True)
+            termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_lista_prikaz))
