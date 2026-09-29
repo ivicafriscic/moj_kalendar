@@ -300,7 +300,13 @@ with tab2:
                     g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
                     g_naslov = urllib.parse.quote(f"Nastava: {info['klijent']}")
                     g_opis = urllib.parse.quote(f"Polaznik: {info['klijent']}\nOpis: {t}")
-                    google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
+        google_cal_link = (
+            "https://calendar.google.com/calendar/render"
+            "?action=TEMPLATE"
+            f"&text={g_naslov}"
+            f"&dates={g_start}/{g_end}"
+            f"&details={g_opis}"
+        )
                     col_g1.markdown(f"[📅 Dodaj u Google kalendar]({google_cal_link})")
                 except:
                     col_g1.write("📅 Poveznica stvorena")
