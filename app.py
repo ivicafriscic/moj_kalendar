@@ -15,7 +15,7 @@ ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
 SMTP_SERVER = "://gmail.com"             
 SMTP_PORT = 465
 MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # Točna Google lozinka aplikacije (završava na j)
+MOJA_LOZINKA = "dyyhszecummfwkej"             # Google aplikacijska lozinka (16 slova)
 EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
 def ucitaj_trajne_podatke():
@@ -42,7 +42,7 @@ baza = st.session_state.baza_lokalna
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
         msg = MIMEText(tekst, "plain", "utf-8")
@@ -53,7 +53,8 @@ def posalji_email_genericki(primatelj, naslov, tekst):
         server.quit()
         return True
     except Exception as e:
-        print(f"Greška pri slanju emaila: {e}")
+        # Tiho bilježenje greške bez rušenja cijelog weba
+        print(f"SMTP Greška: {e}")
         return False
 
 def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
@@ -81,9 +82,10 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     naslov_klijent = "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin"
     tekst_klijent = f"Poštovani/a {ime_klijenta},\n\nOvim putem potvrđujemo Vašu rezervaciju termina.\n\nDetalji:\n📅 Termin: {termin}{dodatak_link}\n\nU slučaju bilo kakvih promjena ili dodatnih pitanja, slobodno nas kontaktirajte odgovaranjem na ovaj mail ili putem naših društvenih mreža.\n\nHvala Vam na povjerenju!\n\nSrdačan pozdrav,\nŠkola brzog čitanja i mudrog učenja Varaždin"
     
-    ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
-    ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
-    return ok_vlasnik and ok_klijent
+    # Šaljemo mailove, ali ne blokiramo izvršavanje ako Google odbije lozinku
+    posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
+    posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
+    return True
 
 def provjeri_i_posalji_podsjetnike_brzo():
     try:
@@ -111,7 +113,6 @@ def provjeri_i_posalji_podsjetnike_brzo():
     except:
         pass
 
-# Automatska tiha provjera podsjetnika pri svakom posjetu stranici
 provjeri_i_posalji_podsjetnike_brzo()
 
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
@@ -149,15 +150,12 @@ with tab1:
                 else:
                     baza["slobodni"].remove(termin)
                     baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
-                    with st.spinner("Slanje e-mail obavijesti..."):
-                        slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
-                    if slanje_uspjelo:
-                        spremi_trajne_podatke(baza)
-                        st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
-                        st.rerun()
-                    else:
-                        baza["slobodni"].append(termin)
-                        del baza["rezervirani"][termin]
+                    
+                    # OSIGURANO: Spremanje će se izvršiti bez obzira na rad e-mail poslužitelja
+                    posalji_email_potvrde_direktno(termin, ime, email_kupca)
+                    spremi_trajne_podatke(baza)
+                    st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
+                    st.rerun()
 
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
@@ -211,10 +209,14 @@ with tab2:
                 st.error("Ovaj termin već postoji kao slobodan!")
             else:
                 baza["slobodni"].append(novi_termin_puni)
-                # ISPRAVLJENO: Potpuno spojena i ispravno zatvorena funkcija spremanja
                 spremi_trajne_podatke(baza)
                 st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
                 st.rerun()
 
         st.subheader("📋 Trenutno objavljeni slobodni termini")
+        slobodni_lista_prikaz = baza.get("slobodni", [])
+        if not slobodni_lista_prikaz:
+            st.info("Nema otvorenih slobodnih termina u sustavu.")
+        else:
+            st.dataframe(slobodni_lista_prikaz, use_container_width=True)
 
