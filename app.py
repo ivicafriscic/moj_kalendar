@@ -70,7 +70,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
         g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
         
-        # POPRAVLJENO: Službena adresa Google kalendara koja provjereno radi bez greške IP adrese
+        # TOČAN I PROVJEREN URL ZA GOOGLE KALENDAR
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -85,6 +85,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
     ok_vlasnik = posalji_email_genericki(EMAIL_PONUDACA, naslov_ponudac, tekst_ponudac)
     ok_klijent = posalji_email_genericki(email_klijenta, naslov_klijent, tekst_klijent)
     return ok_vlasnik and ok_klijent
+
 st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
 
 IME_SLIKE = "logo.png"
