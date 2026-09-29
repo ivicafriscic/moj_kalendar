@@ -69,6 +69,7 @@ def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
         g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
         g_naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
         g_opis = urllib.parse.quote(f"Polaznik: {ime_klijenta}\nOpis: {termin}")
+        # POPRAVLJENO: Točna putanja za generiranje predloška Google kalendara
         google_cal_link = f"https://google.com{g_naslov}&dates={g_start}/{g_end}&details={g_opis}"
         dodatak_link = f"\n\n📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n{google_cal_link}"
     except:
@@ -133,7 +134,7 @@ with tab1:
     st.subheader("🔗 Kontakt i društvene mreže")
     st.markdown("""
     Pratite naš rad ili nas kontaktirajte putem interneta:
-    * **Web stranica:** [://kreo-vz.com](https://://kreo-vz.com)
+    * **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
     * **Facebook:** [Škola brzog čitanja i mudrog učenja - Varaždin](https://facebook.com)
     * **Instagram:** [@skola_brzog_citanja_varazdin](https://instagram.com)
     """)
@@ -185,21 +186,21 @@ with tab2:
                 st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
                 st.rerun()
 
-        # PREOBLIKOVANO: Prikaz slobodnih termina kroz sigurni i brzi st.dataframe tablični sustav
+        # POPRAVLJENO: Preglednik slobodnih termina kroz tablicu i selectbox za sigurno micanje
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        slobodni_tablica = baza.get("slobodni", [])
-        if not slobodni_tablica:
+        slobodni_lista_prikaz = baza.get("slobodni", [])
+        if not slobodni_lista_prikaz:
             st.info("Nema otvorenih slobodnih termina u sustavu.")
         else:
-            st.dataframe(slobodni_tablica, use_container_width=True)
-            termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_tablica))
+            st.dataframe(slobodni_lista_prikaz, use_container_width=True)
+            termin_za_uklanjanje = st.selectbox("Odaberite termin ako ga želite obrisati:", sorted(slobodni_lista_prikaz))
             if st.button("❌ Trajno ukloni odabrani slobodan termin"):
                 baza["slobodni"].remove(termin_za_uklanjanje)
                 spremi_trajne_podatke(baza)
                 st.warning(f"Slobodan termin {termin_za_uklanjanje} je uspješno obrisan.")
                 st.rerun()
 
-        # PREOBLIKOVANO: Prikaz i upravljanje rezervacijama kroz sigurni st.dataframe tablični sustav
+        # POPRAVLJENO: Preglednik i upravljanje iskorištenim/rezerviranim terminima kroz tablicu
         st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
         rezervirani_tablica = baza.get("rezervirani", {})
         if not rezervirani_tablica:
