@@ -1,343 +1,760 @@
-import streamlit as st
-from datetime import datetime, timedelta
-import smtplib
-from email.mime.text import MIMEText
 import io
-import openpyxl
-import urllib.parse
 import os
-import json
+import smtplib
+import urllib.parse
+from datetime import datetime, timedelta, timezone
+from email.mime.text import MIMEText
 
-DATOTEKA_BAZE = "lokalna_baza.json"
-ADMIN_LOZINKA = "Ivo"  # <--- Vaša lozinka za ulaz u Admin Panel
+import openpyxl
+import streamlit as st
+from supabase import create_client, Client
 
-# --- PODACI ZA EMAIL POŠILJATELJA ---
-SMTP_SERVER = "smtp.gmail.com"             
-SMTP_PORT = 465
-MOJ_EMAIL = "ana.koren1@gmail.com"            # Vaš Gmail račun preko kojeg se šalje
-MOJA_LOZINKA = "dyyhszecummfwkej"             # Vaša Google aplikacijska lozinka (16 slova)
-EMAIL_PONUDACA = "friscicivica69@gmail.com" # Mail na koji primate obavijesti o novoj rezervaciji
 
-def ucitaj_trajne_podatke():
-    if os.path.exists(DATOTEKA_BAZE):
-        try:
-            with open(DATOTEKA_BAZE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return {"slobodni": [], "rezervirani": {}, "podsjetnici": []}
+# ============================================================
+# KONFIGURACIJA
+# ============================================================
 
-def spremi_trajne_podatke(podaci):
-    try:
-        with open(DATOTEKA_BAZE, "w", encoding="utf-8") as f:
-            json.dump(podaci, f, indent=4, ensure_ascii=False)
-    except:
-        pass
+st.set_page_config(
+    page_title="Online Rezervacija Termina",
+    page_icon="📅",
+    layout="centered",
+)
 
-# --- INICIJALIZACIJA LOKALNE MEMORIJE ---
-if "baza_lokalna" not in st.session_state:
-    st.session_state.baza_lokalna = ucitaj_trajne_podatke()
+# Svi osjetljivi podaci dolaze iz Streamlit Secrets.
+# U lokalnom radu koristi .streamlit/secrets.toml.
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_SERVICE_KEY = st.secrets["SUPABASE_SERVICE_KEY"]
 
-baza = st.session_state.baza_lokalna
+SMTP_SERVER = st.secrets.get("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(st.secrets.get("SMTP_PORT", 465))
+MOJ_EMAIL = st.secrets["MOJ_EMAIL"]
+MOJA_LOZINKA = st.secrets["MOJA_LOZINKA"]
+EMAIL_PONUDACA = st.secrets["EMAIL_PONUDACA"]
+ADMIN_LOZINKA = st.secrets["ADMIN_LOZINKA"]
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+PROGRAMI = {
+    "35 minuta - POMOĆ U ČITANJU": {
+        "trajanje": 35,
+        "opis": "35 min - POMOĆ U ČITANJU",
+    },
+    "45 minuta - BESPLATNO TESTIRANJE ČITANJA": {
+        "trajanje": 45,
+        "opis": "45 min - BESPLATNO TESTIRANJE ČITANJA",
+    },
+    "90 minuta - BRZO ČITANJE I MUDRO UČENJE": {
+        "trajanje": 90,
+        "opis": "90 min - BRZO ČITANJE I MUDRO UČENJE",
+    },
+}
+
+
+# ============================================================
+# POMOĆNE FUNKCIJE
+# ============================================================
+
+def sada_utc():
+    return datetime.now(timezone.utc)
+
+
+def parse_termin_text(termin):
+    """
+    Prima termin u formatu:
+    2026-10-05 17:00 (35 min - POMOĆ U ČITANJU)
+    """
+    return datetime.strptime(termin[:16], "%Y-%m-%d %H:%M")
+
+
+def format_localni_termin(start_time, program):
+    dt = start_time.astimezone()
+    return f"{dt.strftime('%Y-%m-%d %H:%M')} ({program})"
+
+
+def google_calendar_link(start_time, trajanje, ime_klijenta, opis):
+    kraj = start_time + timedelta(minutes=trajanje)
+
+    # Google Calendar prihvaća UTC vrijeme s oznakom Z.
+    start_utc = start_time.astimezone(timezone.utc)
+    kraj_utc = kraj.astimezone(timezone.utc)
+
+    g_start = start_utc.strftime("%Y%m%dT%H%M%SZ")
+    g_end = kraj_utc.strftime("%Y%m%dT%H%M%SZ")
+
+    naslov = urllib.parse.quote(f"Nastava: {ime_klijenta}")
+    detalji = urllib.parse.quote(
+        f"Polaznik: {ime_klijenta}\n"
+        f"Opis: {opis}"
+    )
+
+    return (
+        "https://calendar.google.com/calendar/render"
+        "?action=TEMPLATE"
+        f"&text={naslov}"
+        f"&dates={g_start}/{g_end}"
+        f"&details={detalji}"
+    )
+
 
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
         server.ehlo()
         server.login(MOJ_EMAIL, MOJA_LOZINKA)
+
         msg = MIMEText(tekst, "plain", "utf-8")
         msg["Subject"] = naslov
         msg["From"] = MOJ_EMAIL
         msg["To"] = primatelj
-        server.sendmail(MOJ_EMAIL, [primatelj], msg.as_string())
+
+        server.sendmail(
+            MOJ_EMAIL,
+            [primatelj],
+            msg.as_string(),
+        )
         server.quit()
         return True
+
     except Exception as e:
-        print(f"Greška pri slanju emaila: {e}")
+        print(f"Greška pri slanju e-maila: {e}")
         return False
 
-def posalji_email_potvrde_direktno(termin, ime_klijenta, email_klijenta):
-    try:
-        # Uzimamo datum i vrijeme iz početka termina
-        cisto_v_cal = termin[:16]
-        p_pocetak = datetime.strptime(cisto_v_cal, "%Y-%m-%d %H:%M")
 
-        # Zadano trajanje je 45 minuta
-        t_trajanje = 45
-
-        if "35 min" in termin:
-            t_trajanje = 35
-        elif "90 min" in termin:
-            t_trajanje = 90
-
-        p_kraj = p_pocetak + timedelta(minutes=t_trajanje)
-
-        # Google Calendar format datuma
-        g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
-        g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
-
-        # Podaci za Google Calendar
-        g_naslov = urllib.parse.quote(
-            f"Nastava: {ime_klijenta}"
-        )
-
-        g_opis = urllib.parse.quote(
-            f"Polaznik: {ime_klijenta}\n"
-            f"Termin: {termin}"
-        )
-
-        # Ispravan Google Calendar link
-        google_cal_link = (
-            "https://calendar.google.com/calendar/render"
-            "?action=TEMPLATE"
-            f"&text={g_naslov}"
-            f"&dates={g_start}/{g_end}"
-            f"&details={g_opis}"
-        )
-
-        dodatak_link = (
-            "\n\n"
-            "📅 Dodaj ovaj termin u svoj Google kalendar jednim klikom:\n"
-            f"{google_cal_link}"
-        )
-
-    except (ValueError, TypeError, IndexError):
-        # Ako termin nije u očekivanom formatu,
-        # email se i dalje šalje bez Calendar linka.
-        dodatak_link = ""
-
-    # ---------------------------------------------------------
-    # EMAIL VLASNIKU / PONUDITELJU
-    # ---------------------------------------------------------
-
-    naslov_ponudac = f"Nova rezervacija termina: {termin}"
-
-    tekst_ponudac = (
-        f"Pozdrav,\n\n"
-        f"Imate novu rezervaciju!\n\n"
-        f"Termin: {termin}\n"
-        f"Klijent: {ime_klijenta}\n"
-        f"E-mail klijenta: {email_klijenta}"
-        f"{dodatak_link}\n\n"
-        f"Lijep pozdrav,\n"
-        f"Vaš Web Sustav"
+def posalji_email_potvrde(rezervacija):
+    start_time = datetime.fromisoformat(
+        rezervacija["start_time"].replace("Z", "+00:00")
     )
 
-    # ---------------------------------------------------------
-    # EMAIL KLIJENTU
-    # ---------------------------------------------------------
+    trajanje = rezervacija["duration_minutes"]
+    ime = rezervacija["client_name"]
+    email = rezervacija["client_email"]
+    program = rezervacija["program"]
 
-    naslov_klijent = (
-        "Potvrda rezervacije termina - "
+    link = google_calendar_link(
+        start_time,
+        trajanje,
+        ime,
+        program,
+    )
+
+    termin = format_localni_termin(start_time, program)
+
+    tekst_klijent = (
+        f"Poštovani/a {ime},\n\n"
+        "ovim putem potvrđujemo Vašu rezervaciju termina.\n\n"
+        f"📅 Termin: {termin}\n"
+        f"⏱️ Trajanje: {trajanje} minuta\n\n"
+        "📅 Dodaj termin u Google kalendar:\n"
+        f"{link}\n\n"
+        "Molimo Vas da budete spremni nekoliko minuta prije "
+        "početka termina.\n\n"
+        "Ako imate pitanja ili ne možete doći na termin, "
+        "slobodno nam odgovorite na ovaj e-mail.\n\n"
+        "Srdačan pozdrav,\n"
         "Škola brzog čitanja i mudrog učenja Varaždin"
     )
 
-    tekst_klijent = (
-        f"Poštovani/a {ime_klijenta},\n\n"
-        f"Ovim putem potvrđujemo Vašu rezervaciju termina.\n\n"
-        f"Detalji:\n"
-        f"📅 Termin: {termin}"
-        f"{dodatak_link}\n\n"
-        f"U slučaju bilo kakvih promjena ili dodatnih pitanja, "
-        f"slobodno nas kontaktirajte odgovaranjem na ovaj mail "
-        f"ili putem naših društvenih mreža.\n\n"
-        f"Hvala Vam na povjerenju!\n\n"
-        f"Srdačan pozdrav,\n"
-        f"Škola brzog čitanja i mudrog učenja Varaždin"
-    )
-
-    # ---------------------------------------------------------
-    # SLANJE EMAILOVA
-    # ---------------------------------------------------------
-
-    ok_vlasnik = posalji_email_genericki(
-        EMAIL_PONUDACA,
-        naslov_ponudac,
-        tekst_ponudac
+    tekst_ponudac = (
+        "Pozdrav,\n\n"
+        "imate novu rezervaciju!\n\n"
+        f"📅 Termin: {termin}\n"
+        f"⏱️ Trajanje: {trajanje} minuta\n"
+        f"👤 Klijent: {ime}\n"
+        f"📧 E-mail: {email}\n\n"
+        f"Google Calendar:\n{link}\n\n"
+        "Vaš Web Sustav"
     )
 
     ok_klijent = posalji_email_genericki(
-        email_klijenta,
-        naslov_klijent,
-        tekst_klijent
+        email,
+        "Potvrda rezervacije termina - Škola brzog čitanja i mudrog učenja Varaždin",
+        tekst_klijent,
     )
 
-    return ok_vlasnik and ok_klijent
+    ok_ponudac = posalji_email_genericki(
+        EMAIL_PONUDACA,
+        f"Nova rezervacija termina: {termin}",
+        tekst_ponudac,
+    )
 
-st.set_page_config(page_title="Rezervacija Termina", page_icon="📅", layout="centered")
+    return ok_klijent and ok_ponudac
+
+
+def posalji_podsjetnik(rezervacija):
+    start_time = datetime.fromisoformat(
+        rezervacija["start_time"].replace("Z", "+00:00")
+    )
+
+    trajanje = rezervacija["duration_minutes"]
+    ime = rezervacija["client_name"]
+    email = rezervacija["client_email"]
+    program = rezervacija["program"]
+
+    termin = format_localni_termin(start_time, program)
+
+    tekst = (
+        f"Poštovani/a {ime},\n\n"
+        "ovo je ljubazni podsjetnik na Vaš rezervirani termin.\n\n"
+        f"📅 Termin: {termin}\n"
+        f"⏱️ Trajanje: {trajanje} minuta\n\n"
+        "Vaš termin počinje za približno 4 sata.\n\n"
+        "Molimo Vas da budete spremni nekoliko minuta prije "
+        "početka termina.\n\n"
+        "Ako ne možete doći na termin, molimo Vas da nam se "
+        "što prije javite odgovaranjem na ovaj e-mail.\n\n"
+        "Srdačan pozdrav,\n"
+        "Škola brzog čitanja i mudrog učenja Varaždin"
+    )
+
+    return posalji_email_genericki(
+        email,
+        "⏰ Podsjetnik na Vaš rezervirani termin",
+        tekst,
+    )
+
+
+def ocisti_istekle_i_posalji_podsjetnike():
+    """
+    Radi pri svakom učitavanju aplikacije i periodički dok je
+    otvorena. Za potpuno neovisno 24/7 slanje podsjetnika vidi
+    napomenu u README-u / uputama.
+    """
+    try:
+        supabase.rpc("cleanup_expired_appointments").execute()
+    except Exception as e:
+        print(f"Čišćenje isteka: {e}")
+
+    try:
+        due = (
+            supabase
+            .rpc("get_due_reminders")
+            .execute()
+        )
+
+        rezervacije = due.data or []
+
+        for rezervacija in rezervacije:
+            if posalji_podsjetnik(rezervacija):
+                try:
+                    supabase.rpc(
+                        "mark_reminder_sent",
+                        {"p_appointment_id": rezervacija["id"]},
+                    ).execute()
+                except Exception as e:
+                    print(f"Greška označavanja podsjetnika: {e}")
+
+    except Exception as e:
+        print(f"Provjera podsjetnika: {e}")
+
+
+def dohvati_slobodne_termine():
+    try:
+        result = (
+            supabase
+            .table("appointments")
+            .select("*")
+            .eq("status", "available")
+            .gt("start_time", sada_utc().isoformat())
+            .order("start_time")
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        st.error(f"Greška pri dohvaćanju termina: {e}")
+        return []
+
+
+def dohvati_rezervacije():
+    try:
+        result = (
+            supabase
+            .table("appointments")
+            .select("*")
+            .eq("status", "reserved")
+            .order("start_time")
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        st.error(f"Greška pri dohvaćanju rezervacija: {e}")
+        return []
+
+
+# ============================================================
+# AUTOMATSKA PROVJERA
+# ============================================================
+
+ocisti_istekle_i_posalji_podsjetnike()
+
+
+@st.fragment(run_every="60s")
+def automatska_provjera():
+    ocisti_istekle_i_posalji_podsjetnike()
+    st.caption("Sustav automatski provjerava podsjetnike i istekle termine.")
+
+
+automatska_provjera()
+
+
+# ============================================================
+# LOGO / NASLOV
+# ============================================================
 
 IME_SLIKE = "logo.png"
+
 if os.path.exists(IME_SLIKE):
     st.image(IME_SLIKE, use_container_width=True)
 else:
     st.header("Škola brzog čitanja i mudrog učenja Varaždin")
 
 st.title("📅 Online Rezervacija Termina")
-st.markdown("Ovdje možete brzo i izravno rezervirati ili organizirati termine za nastavu.")
-tab1, tab2 = st.tabs(["👤 Rezerviraj Termin", "🔐 Admin Panel"])
+st.markdown(
+    "Ovdje možete brzo i izravno rezervirati termin "
+    "za nastavu."
+)
+
+
+# ============================================================
+# TABOVI
+# ============================================================
+
+tab1, tab2 = st.tabs(
+    ["👤 Rezerviraj Termin", "🔐 Admin Panel"]
+)
+
+
+# ============================================================
+# JAVNA REZERVACIJA
+# ============================================================
 
 with tab1:
-    st.write("Dobrodošli! Odaberite jedan od slobodnih termina i unesite svoje podatke.")
+    st.write(
+        "Dobrodošli! Odaberite jedan od slobodnih termina "
+        "i unesite svoje podatke."
+    )
+
     if "uspjeh_poruka" in st.session_state:
         st.success(st.session_state.uspjeh_poruka)
         del st.session_state.uspjeh_poruka
 
-    slobodni_prikaz = [t for t in baza.get("slobodni", []) if t not in baza.get("rezervirani", {})]
-    
-    if not slobodni_prikaz:
-        st.info("Trenutno nema slobodnih termina. Molimo pokušajte kasnije.")
+    slobodni = dohvati_slobodne_termine()
+
+    if not slobodni:
+        st.info(
+            "Trenutno nema slobodnih termina. "
+            "Molimo pokušajte kasnije."
+        )
     else:
-        with st.form("forma_rezervacija", clear_on_submit=True):
+        opcije = {}
+
+        for termin in slobodni:
+            start = datetime.fromisoformat(
+                termin["start_time"].replace("Z", "+00:00")
+            )
+            prikaz = format_localni_termin(
+                start,
+                termin["program"],
+            )
+            opcije[prikaz] = termin
+
+        with st.form(
+            "forma_rezervacija",
+            clear_on_submit=True,
+        ):
             ime = st.text_input("Ime i Prezime:")
             email_kupca = st.text_input("Vaš E-mail:")
-            termin = st.selectbox("Odaberite slobodan termin:", sorted(slobodni_prikaz))
-            gumb_rezerviraj = st.form_submit_button("Potvrdi Rezervaciju")
-            
+
+            odabrani_prikaz = st.selectbox(
+                "Odaberite slobodan termin:",
+                list(opcije.keys()),
+            )
+
+            gumb_rezerviraj = st.form_submit_button(
+                "Potvrdi Rezervaciju"
+            )
+
             if gumb_rezerviraj:
-                if not ime or not email_kupca:
+                if not ime.strip() or not email_kupca.strip():
                     st.warning("Molimo ispunite sva polja!")
+                elif "@" not in email_kupca:
+                    st.warning(
+                        "Molimo unesite ispravnu e-mail adresu."
+                    )
                 else:
-                    baza["slobodni"].remove(termin)
-                    baza["rezervirani"][termin] = {"klijent": ime, "email": email_kupca}
-                    with st.spinner("Slanje e-mail obavijesti..."):
-                        slanje_uspjelo = posalji_email_potvrde_direktno(termin, ime, email_kupca)
-                    if slanje_uspjelo:
-                        spremi_trajne_podatke(baza)
-                        st.session_state.uspjeh_poruka = f"Uspješno ste rezervirali termin {termin}! Potvrda je poslana na Vaš e-mail."
+                    odabrani = opcije[odabrani_prikaz]
+
+                    try:
+                        result = supabase.rpc(
+                            "reserve_appointment",
+                            {
+                                "p_appointment_id": odabrani["id"],
+                                "p_client_name": ime.strip(),
+                                "p_client_email": email_kupca.strip(),
+                            },
+                        ).execute()
+
+                        if not result.data:
+                            st.error(
+                                "Ovaj termin je upravo rezervirao "
+                                "netko drugi. Molimo odaberite "
+                                "drugi termin."
+                            )
+                            st.rerun()
+
+                        rezervacija = result.data[0]
+
+                        with st.spinner(
+                            "Šaljem potvrdu rezervacije..."
+                        ):
+                            email_ok = posalji_email_potvrde(
+                                rezervacija
+                            )
+
+                        if email_ok:
+                            st.session_state.uspjeh_poruka = (
+                                f"Uspješno ste rezervirali termin "
+                                f"{odabrani_prikaz}. "
+                                "Potvrda je poslana na Vaš e-mail."
+                            )
+                        else:
+                            st.session_state.uspjeh_poruka = (
+                                f"Rezervacija termina "
+                                f"{odabrani_prikaz} je spremljena, "
+                                "ali slanje jednog ili oba e-maila "
+                                "nije uspjelo. Molimo provjerite "
+                                "e-mail postavke."
+                            )
+
                         st.rerun()
-                    else:
-                        baza["slobodni"].append(termin)
-                        del baza["rezervirani"][termin]
+
+                    except Exception as e:
+                        st.error(
+                            "Rezervacija nije uspjela. "
+                            f"Detalj: {e}"
+                        )
 
     st.markdown("---")
     st.subheader("🔗 Kontakt i društvene mreže")
-    st.markdown("""
-    Pratite naš rad ili nas kontaktirajte putem interneta:
-    * **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
-    * **Facebook:** [Škola brzog čitanja i mudrog učenja - Varaždin](https://facebook.com)
-    * **Instagram:** [@skola_brzog_citanja_varazdin](https://instagram.com)
-    """)
+
+    st.markdown(
+        """
+**Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
+
+**Facebook:** Škola brzog čitanja i mudrog učenja - Varaždin
+
+**Instagram:** @skola_brzog_citanja_varazdin
+"""
+    )
+
+
+# ============================================================
+# ADMIN PANEL
+# ============================================================
 
 with tab2:
     st.header("Administracija")
-    upisana_lozinka = st.text_input("Unesite admin lozinku:", type="password")
-    
+
+    upisana_lozinka = st.text_input(
+        "Unesite admin lozinku:",
+        type="password",
+    )
+
     if upisana_lozinka == ADMIN_LOZINKA:
         st.success("Pristup odobren!")
-        
-        st.subheader("🛠️ Alat za generiranje termina")
-        
-        if "admin_uspjeh" in st.session_state:
-            st.success(st.session_state.admin_uspjeh)
-            del st.session_state.admin_uspjeh
 
-        if st.button("🚨 Očisti cijelu listu (Kreni ispočetka)"):
-            baza["slobodni"] = []
-            baza["rezervirani"] = {}
-            baza["podsjetnici"] = []
-            spremi_trajne_podatke(baza)
-            st.warning("Svi podaci su u potpunosti očišćeni!")
-            st.rerun()
+        # ----------------------------------------------------
+        # ČIŠĆENJE
+        # ----------------------------------------------------
 
-        col_d, col_v = st.columns(2)
-        odabrani_datum = col_d.date_input("1. Odaberite datum:", datetime.now())
-        sati_opcije = [f"{h:02d}:{m:02d}" for h in range(8, 21) for m in (0, 15, 30, 45)]
-        odabrano_vrijeme = col_v.selectbox("2. Odaberite vrijeme početka:", sati_opcije)
-        
-        st.write("3. Označite program lekcije:")
-        opcije_trajanja = {
-            "35 minuta - POMOĆ U ČITANJU": "35 min - POMOĆ U ČITANJU",
-            "45 minuta - BESPLATNO TESTIRANJE ČITANJA": "45 min - BESPLATNO TESTIRANJE ČITANJA",
-            "90 minuta - BRZO ČITANJE I MUDRO UČENJE": "90 min - BRZO ČITANJE I MUDRO UČENJE"
-        }
-        odabrani_opis = st.radio("Programi:", list(opcije_trajanja.keys()))
-        tekst_programa = opcije_trajanja[odabrani_opis]
-        
-        if st.button("➕ Kreiraj i dodaj termin u sustav"):
-            vrijeme_iso = f"{odabrani_datum} {odabrano_vrijeme}"
-            novi_termin_puni = f"{vrijeme_iso} ({tekst_programa})"
-            
-            if novi_termin_puni in baza.get("slobodni", []):
-                st.error("Ovaj termin već postoji kao slobodan!")
-            else:
-                baza["slobodni"].append(novi_termin_puni)
-                spremi_trajne_podatke(baza)
-                st.session_state.admin_uspjeh = f"Uspješno generiran termin: {novi_termin_puni}"
+        if st.button(
+            "🧹 Očisti istekle termine odmah",
+            use_container_width=True,
+        ):
+            try:
+                supabase.rpc(
+                    "cleanup_expired_appointments"
+                ).execute()
+
+                st.success(
+                    "Istekli termini su uklonjeni iz aktivnih rezervacija."
+                )
                 st.rerun()
 
+            except Exception as e:
+                st.error(f"Greška: {e}")
+
+        # ----------------------------------------------------
+        # GENERIRANJE TERMINA
+        # ----------------------------------------------------
+
+        st.subheader("🛠️ Alat za generiranje termina")
+
+        col_d, col_v = st.columns(2)
+
+        odabrani_datum = col_d.date_input(
+            "1. Odaberite datum:",
+            datetime.now().date(),
+        )
+
+        sati_opcije = [
+            f"{h:02d}:{m:02d}"
+            for h in range(8, 21)
+            for m in (0, 15, 30, 45)
+        ]
+
+        odabrano_vrijeme = col_v.selectbox(
+            "2. Odaberite vrijeme početka:",
+            sati_opcije,
+        )
+
+        st.write("3. Označite program lekcije:")
+
+        odabrani_opis = st.radio(
+            "Programi:",
+            list(PROGRAMI.keys()),
+        )
+
+        program_podaci = PROGRAMI[odabrani_opis]
+
+        if st.button(
+            "➕ Kreiraj i dodaj termin u sustav",
+            use_container_width=True,
+        ):
+            try:
+                # Termin se sprema kao lokalno vrijeme Europe/Zagreb.
+                # PostgreSQL ga pretvara u timestamptz.
+                lokalni_string = (
+                    f"{odabrani_datum} {odabrano_vrijeme}"
+                )
+
+                novi_termin = datetime.strptime(
+                    lokalni_string,
+                    "%Y-%m-%d %H:%M",
+                )
+
+                result = supabase.table(
+                    "appointments"
+                ).insert(
+                    {
+                        "start_time": novi_termin.isoformat(),
+                        "duration_minutes": program_podaci["trajanje"],
+                        "program": program_podaci["opis"],
+                        "status": "available",
+                    }
+                ).execute()
+
+                st.success(
+                    "Uspješno generiran termin: "
+                    f"{lokalni_string} "
+                    f"({program_podaci['opis']})"
+                )
+                st.rerun()
+
+            except Exception as e:
+                st.error(
+                    "Termin nije moguće dodati. "
+                    "Možda već postoji isti termin."
+                )
+                st.caption(str(e))
+
+        # ----------------------------------------------------
+        # SLOBODNI TERMINI
+        # ----------------------------------------------------
+
         st.subheader("📋 Trenutno objavljeni slobodni termini")
-        slobodni_lista_prikaz = baza.get("slobodni", [])
-        if not slobodni_lista_prikaz:
-            st.info("Nema otvorenih slobodnih termina u sustavu.")
+
+        slobodni_admin = dohvati_slobodne_termine()
+
+        if not slobodni_admin:
+            st.info(
+                "Nema otvorenih slobodnih termina u sustavu."
+            )
         else:
-            for slobodan in sorted(slobodni_lista_prikaz):
-                col_s1, col_s2 = st.columns(2)
-                col_s1.write(f"🟢 {slobodan}")
-                if col_s2.button("Ukloni slobodan", key=f"rem_{slobodan}"):
-                    baza["slobodni"].remove(slobodan)
-                    spremi_trajne_podatke(baza)
-                    st.warning(f"Slobodan termin {slobodan} je uklonjen.")
+            for termin in slobodni_admin:
+                start = datetime.fromisoformat(
+                    termin["start_time"].replace("Z", "+00:00")
+                )
+
+                prikaz = format_localni_termin(
+                    start,
+                    termin["program"],
+                )
+
+                c1, c2 = st.columns([4, 1])
+
+                c1.write(f"🟢 {prikaz}")
+
+                if c2.button(
+                    "Ukloni",
+                    key=f"remove_{termin['id']}",
+                ):
+                    supabase.table(
+                        "appointments"
+                    ).update(
+                        {"status": "cancelled"}
+                    ).eq(
+                        "id",
+                        termin["id"],
+                    ).execute()
+
                     st.rerun()
 
-        st.subheader("📋 Pregled zauzetih rezervacija (Iskorišteni termini)")
-        rezervirani_tablica = baza.get("rezervirani", {})
-        if not rezervirani_tablica:
+        # ----------------------------------------------------
+        # REZERVACIJE
+        # ----------------------------------------------------
+
+        st.subheader(
+            "📋 Pregled zauzetih rezervacija"
+        )
+
+        rezervacije = dohvati_rezervacije()
+
+        if not rezervacije:
             st.info("Nema rezerviranih termina.")
         else:
-            for t, info in sorted(rezervirani_tablica.items()):
-                st.markdown(f"📅 **{t}** ➡️ 👤 {info['klijent']} ({info['email']})")
-                col_g1, col_g2 = st.columns(2)
-                
-                try:
-                    cisto_v_cal = t[:16]
-                    p_pocetak = datetime.strptime(cisto_v_cal, "%Y-%m-%d %H:%M")
-                    t_trajanje = 45
-                    if "35 min" in t: t_trajanje = 35
-                    elif "90 min" in t: t_trajanje = 90
-                    p_kraj = p_pocetak + timedelta(minutes=t_trajanje)
-                    
-                    g_start = p_pocetak.strftime("%Y%m%dT%H%M%S")
-                    g_end = p_kraj.strftime("%Y%m%dT%H%M%S")
-                    g_naslov = urllib.parse.quote(f"Nastava: {info['klijent']}")
-                    g_opis = urllib.parse.quote(f"Polaznik: {info['klijent']}\nOpis: {t}")
-                    google_cal_link = (
-                    "https://calendar.google.com/calendar/render"
-                    "?action=TEMPLATE"
-                    f"&text={g_naslov}"
-                    f"&dates={g_start}/{g_end}"
-                    f"&details={g_opis}"
-                    )
-                    col_g1.markdown(f"[📅 Dodaj u Google kalendar]({google_cal_link})")
-                except:
-                    col_g1.write("📅 Poveznica stvorena")
+            for rezervacija in rezervacije:
+                start = datetime.fromisoformat(
+                    rezervacija["start_time"].replace("Z", "+00:00")
+                )
 
-                if col_g2.button("Otkaži rezervaciju", key=f"del_{t}"):
-                    baza["slobodni"].append(t)
-                    del baza["rezervirani"][t]
-                    spremi_trajne_podatke(baza)
-                    st.warning(f"Rezervacija {t} je otkazana.")
+                trajanje = rezervacija["duration_minutes"]
+
+                prikaz = format_localni_termin(
+                    start,
+                    rezervacija["program"],
+                )
+
+                st.markdown(
+                    f"📅 **{prikaz}**  \n"
+                    f"👤 {rezervacija['client_name']}  \n"
+                    f"📧 {rezervacija['client_email']}"
+                )
+
+                link = google_calendar_link(
+                    start,
+                    trajanje,
+                    rezervacija["client_name"],
+                    rezervacija["program"],
+                )
+
+                c1, c2 = st.columns(2)
+
+                c1.markdown(
+                    f"[📅 Dodaj u Google kalendar]({link})"
+                )
+
+                if c2.button(
+                    "Otkaži rezervaciju",
+                    key=f"cancel_{rezervacija['id']}",
+                ):
+                    supabase.table(
+                        "appointments"
+                    ).update(
+                        {
+                            "status": "available",
+                            "client_name": None,
+                            "client_email": None,
+                            "reserved_at": None,
+                            "reminder_sent": False,
+                        }
+                    ).eq(
+                        "id",
+                        rezervacija["id"],
+                    ).execute()
+
+                    st.success(
+                        "Rezervacija je otkazana, a termin "
+                        "je ponovno slobodan."
+                    )
                     st.rerun()
+
                 st.markdown("---")
-            
+
+            # ------------------------------------------------
+            # EXCEL
+            # ------------------------------------------------
+
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Rezervacije"
-            ws.append(["Datum i Vrijeme", "Ime i Prezime", "E-mail klijenta"])
-            for t, info in rezervirani_tablica.items():
-                ws.append([t, info['klijent'], info['email']])
-            
+
+            ws.append(
+                [
+                    "Datum i Vrijeme",
+                    "Trajanje",
+                    "Program",
+                    "Ime i Prezime",
+                    "E-mail klijenta",
+                    "Podsjetnik poslan",
+                ]
+            )
+
+            for rezervacija in rezervacije:
+                start = datetime.fromisoformat(
+                    rezervacija["start_time"].replace("Z", "+00:00")
+                )
+
+                ws.append(
+                    [
+                        start.astimezone().strftime(
+                            "%d.%m.%Y %H:%M"
+                        ),
+                        rezervacija["duration_minutes"],
+                        rezervacija["program"],
+                        rezervacija["client_name"],
+                        rezervacija["client_email"],
+                        "DA"
+                        if rezervacija["reminder_sent"]
+                        else "NE",
+                    ]
+                )
+
             excel_data = io.BytesIO()
             wb.save(excel_data)
             excel_data.seek(0)
+
             st.download_button(
                 label="📥 Preuzmi Excel tablicu rezervacija",
                 data=excel_data,
-                file_name=f"rezervacije_{datetime.now().strftime('%d.%m.%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name=(
+                    f"rezervacije_"
+                    f"{datetime.now().strftime('%d.%m.%Y')}.xlsx"
+                ),
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
             )
-            
-    elif upisana_lozinka != "":
+
+        # ----------------------------------------------------
+        # OPREZNO ČIŠĆENJE SVIH TERMINA
+        # ----------------------------------------------------
+
+        st.markdown("---")
+        st.subheader("🚨 Potpuno čišćenje")
+
+        potvrda_ciscenja = st.checkbox(
+            "Želim obrisati sve termine i rezervacije."
+        )
+
+        if potvrda_ciscenja:
+            if st.button(
+                "🚨 OČISTI CIJELI SUSTAV",
+                type="secondary",
+            ):
+                try:
+                    supabase.rpc(
+                        "clear_all_appointments"
+                    ).execute()
+
+                    st.success(
+                        "Svi termini i rezervacije su očišćeni."
+                    )
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Greška: {e}")
+
+    elif upisana_lozinka:
         st.error("Pogrešna lozinka!")
-
-
 
