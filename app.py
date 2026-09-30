@@ -484,9 +484,9 @@ with tab1:
         """
 **Web stranica:** [www.kreo-vz.com](https://kreo-vz.com)
 
-**Facebook:** Škola brzog čitanja i mudrog učenja - Varaždin
+**Facebook:** https://www.facebook.com/SBCiMUVarazdin/?locale=hr_HR
 
-**Instagram:** @skola_brzog_citanja_varazdin
+**Instagram:** https://www.instagram.com/brzocitanjeimudroucenjevz/
 """
     )
 
