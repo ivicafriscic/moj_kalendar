@@ -470,6 +470,7 @@ def obradi_otkazivanje_klijenta():
         st.success("Vaša rezervacija je uspješno otkazana.")
         st.info("Termin je sada ponovno slobodan za rezervaciju.")
         st.query_params.clear()
+        st.rerun()
 
     except Exception as e:
         st.error(f"Otkazivanje nije uspjelo: {e}")
@@ -538,7 +539,7 @@ with tab1:
             opcije[prikaz] = termin
 
         with st.form("forma_rezervacija", clear_on_submit=True):
-            ime = st.text_input("Ime i Prezime:")
+            ime = st.text_input("Ime i Prezime djeteta:")
             email_kupca = st.text_input("Vaš E-mail:")
             odabrani_prikaz = st.selectbox(
                 "Odaberite slobodan termin:",
