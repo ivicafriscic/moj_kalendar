@@ -2,6 +2,8 @@ import io
 import os
 import smtplib
 import urllib.parse
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 
@@ -31,6 +33,8 @@ MOJ_EMAIL = st.secrets["MOJ_EMAIL"]
 MOJA_LOZINKA = st.secrets["MOJA_LOZINKA"]
 EMAIL_PONUDACA = st.secrets["EMAIL_PONUDACA"]
 ADMIN_LOZINKA = st.secrets["ADMIN_LOZINKA"]
+
+APP_PUBLIC_URL = "https://mojkalendar-xff53d3yjcy6fwekctcmxg.streamlit.app/"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -96,6 +100,29 @@ def google_calendar_link(start_time, trajanje, ime_klijenta, opis):
     )
 
 
+def napravi_token_otkazivanja(appointment_id, email):
+    """
+    Sigurni token za otkazivanje bez prijave.
+    Token je vezan uz ID termina i e-mail korisnika.
+    """
+    poruka = f"{appointment_id}|{email.strip().lower()}"
+    return hmac.new(
+        SUPABASE_SERVICE_KEY.encode("utf-8"),
+        poruka.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def link_za_otkazivanje(appointment_id, email):
+    token = napravi_token_otkazivanja(appointment_id, email)
+    return (
+        f"{APP_PUBLIC_URL}"
+        f"?otkazi={urllib.parse.quote(str(appointment_id))}"
+        f"&token={token}"
+    )
+
+
+
 def posalji_email_genericki(primatelj, naslov, tekst):
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
@@ -138,6 +165,7 @@ def posalji_email_potvrde(rezervacija):
     )
 
     termin = format_localni_termin(start_time, program)
+    link_otkazivanja = link_za_otkazivanje(rezervacija["id"], email)
 
     tekst_klijent = (
         f"Poštovani/a {ime},\n\n"
@@ -146,6 +174,8 @@ def posalji_email_potvrde(rezervacija):
         f"⏱️ Trajanje: {trajanje} minuta\n\n"
         "📅 Dodaj termin u Google kalendar:\n"
         f"{link}\n\n"
+        "❌ Ako ne možete doći, možete otkazati termin ovdje:\n"
+        f"{link_otkazivanja}\n\n"
         "Molimo Vas da budete spremni nekoliko minuta prije "
         "početka termina.\n\n"
         "Ako imate pitanja ili ne možete doći na termin, "
@@ -310,10 +340,119 @@ def dohvati_rezervacije():
         return []
 
 
+def obradi_otkazivanje_klijenta():
+    """
+    Omogućuje klijentu otkazivanje preko sigurnog linka iz e-maila.
+    Nakon otkazivanja šalje potvrdu klijentu i obavijest administratoru.
+    """
+    otkazi = st.query_params.get("otkazi")
+    token = st.query_params.get("token")
+
+    if not otkazi or not token:
+        return
+
+    try:
+        appointment_id = str(otkazi)
+
+        result = (
+            supabase
+            .table("appointments")
+            .select("*")
+            .eq("id", appointment_id)
+            .eq("status", "reserved")
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            st.error(
+                "Ovaj termin više nije moguće otkazati. "
+                "Možda je već otkazan ili više nije rezerviran."
+            )
+            st.query_params.clear()
+            return
+
+        rezervacija = result.data[0]
+        email = rezervacija["client_email"]
+
+        ocekivani_token = napravi_token_otkazivanja(
+            appointment_id,
+            email,
+        )
+
+        if not hmac.compare_digest(token, ocekivani_token):
+            st.error("Neispravan link za otkazivanje.")
+            st.query_params.clear()
+            return
+
+        supabase.table("appointments").update(
+            {
+                "status": "available",
+                "client_name": None,
+                "client_email": None,
+                "reserved_at": None,
+                "reminder_sent": False,
+            }
+        ).eq("id", appointment_id).execute()
+
+        start_time = datetime.fromisoformat(
+            rezervacija["start_time"].replace("Z", "+00:00")
+        )
+        termin = format_localni_termin(
+            start_time,
+            rezervacija["program"],
+        )
+
+        tekst_klijent = (
+            f"Poštovani/a {rezervacija['client_name']},\n\n"
+            "Vaša rezervacija termina je uspješno otkazana.\n\n"
+            f"📅 Termin: {termin}\n"
+            f"⏱️ Trajanje: {rezervacija['duration_minutes']} minuta\n\n"
+            "Ako želite, možete rezervirati novi termin putem naše "
+            "stranice.\n\n"
+            "Srdačan pozdrav,\n"
+            "Škola brzog čitanja i mudrog učenja Varaždin"
+        )
+
+        tekst_ponudac = (
+            "Klijent je sam otkazao rezervaciju.\n\n"
+            f"📅 Termin: {termin}\n"
+            f"👤 Klijent: {rezervacija['client_name']}\n"
+            f"📧 E-mail: {email}\n\n"
+            "Termin je ponovno slobodan za rezervaciju."
+        )
+
+        posalji_email_genericki(
+            email,
+            "Potvrda otkazivanja termina - Škola brzog čitanja i mudrog učenja Varaždin",
+            tekst_klijent,
+        )
+
+        posalji_email_genericki(
+            EMAIL_PONUDACA,
+            f"Klijent je otkazao rezervaciju: {termin}",
+            tekst_ponudac,
+        )
+
+        st.success(
+            "Vaša rezervacija je uspješno otkazana. "
+            "Na Vaš e-mail poslali smo potvrdu otkazivanja."
+        )
+        st.info("Termin je sada ponovno slobodan za rezervaciju.")
+
+        st.query_params.clear()
+
+    except Exception as e:
+        st.error(f"Otkazivanje nije uspjelo: {e}")
+        st.query_params.clear()
+
+
+
 # ============================================================
 # AUTOMATSKA PROVJERA
 # ============================================================
 
+obradi_otkazivanje_klijenta()
 ocisti_istekle_i_posalji_podsjetnike()
 
 
@@ -798,4 +937,3 @@ with tab2:
 
     elif upisana_lozinka:
         st.error("Pogrešna lozinka!")
-
