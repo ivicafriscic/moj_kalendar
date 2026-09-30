@@ -538,7 +538,7 @@ with tab1:
             opcije[prikaz] = termin
 
         with st.form("forma_rezervacija", clear_on_submit=True):
-            ime = st.text_input("Ime i Prezime djeteta:")
+            ime = st.text_input("Ime i Prezime:")
             email_kupca = st.text_input("Vaš E-mail:")
             odabrani_prikaz = st.selectbox(
                 "Odaberite slobodan termin:",
